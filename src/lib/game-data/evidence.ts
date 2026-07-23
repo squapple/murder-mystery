@@ -28,6 +28,11 @@ export interface EvidenceItem {
    * stmt-lee-office-visit(트리거 질문 자체)에는 붙이지 않는다 — 카테고리가 아니라 키워드 매칭 대상이므로.
    */
   breakdownCategory?: "A" | "B" | "C";
+  /**
+   * 조사 모드에서 카드를 클릭했을 때 확대 표시되는 상세 설명 (플레이어 실전 피드백 반영).
+   * 생략 시 revealedFact를 그대로 확대 표시에 사용한다 — 모든 항목에 강제할 필요는 없다.
+   */
+  detail?: string;
 }
 
 export const EVIDENCE: EvidenceItem[] = [
@@ -36,6 +41,8 @@ export const EVIDENCE: EvidenceItem[] = [
     category: "physical",
     name: "현장 흙 감식",
     revealedFact: "사건 현장(산책로) 흙 성분 특정",
+    detail:
+      "산책로 특정 구간의 흙에서 주변 지역과 구별되는 독특한 광물 성분비가 검출됐다 — 이후 신발 흙 대조의 기준 시료가 된다.",
     revealTiming: "round1_base",
   },
   {
@@ -43,6 +50,8 @@ export const EVIDENCE: EvidenceItem[] = [
     category: "physical",
     name: "사망추정시각",
     revealedFact: "23:45경 사망",
+    detail:
+      "부검 소견: 목과 어깨 부위에 다발성 타박상, 뒤통수에 열상 확인. 흉기에 의한 자상·열상은 발견되지 않았다 — 몸싸움 중 넘어지며 바닥이나 주변 지형지물에 부딪혀 생긴 손상으로 추정된다. 직접 사인은 두부 외상. 위 내용물 소화 정도를 근거로 사망 추정 시각은 23:45경으로 특정됐다.",
     revealTiming: "round1_base",
   },
   {
@@ -50,6 +59,8 @@ export const EVIDENCE: EvidenceItem[] = [
     category: "physical",
     name: "CCTV 공백",
     revealedFact: "23:30~00:00 CCTV 공백 구간 존재",
+    detail:
+      "산책로 진입로 CCTV가 23:30부터 00:00까지 정확히 30분간 녹화되지 않았다. 단순 고장이라기엔 공백 구간이 지나치게 깔끔해, 인위적 조작 가능성이 의심된다.",
     revealTiming: "round1_base",
     breakdownCategory: "A",
   },

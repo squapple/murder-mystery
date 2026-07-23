@@ -9,12 +9,14 @@ import type {
   GamePhase,
   AccuseResult,
 } from "@/lib/game-client-types";
+import { saveGame, loadGame, clearGame, type SavedGameState } from "@/lib/gameSave";
 import IntroScreen from "./IntroScreen";
 import CastingScreen from "./CastingScreen";
 import InvestigationBoard from "./InvestigationBoard";
 import InterrogationChat from "./InterrogationChat";
 import AccusationScreen from "./AccusationScreen";
 import ResultScreen from "./ResultScreen";
+import NotesPanel from "./NotesPanel";
 
 const TOTAL_ROUNDS = 3;
 
@@ -35,14 +37,54 @@ export default function GameApp() {
   const [lockedCharacters, setLockedCharacters] = useState<Set<string>>(new Set());
   const [collectedEvidenceIds, setCollectedEvidenceIds] = useState<Set<string>>(new Set());
   const [totalQuestionChars, setTotalQuestionChars] = useState(0);
+  const [notes, setNotes] = useState("");
 
   const [accuseLoading, setAccuseLoading] = useState(false);
   const [accuseError, setAccuseError] = useState<string | null>(null);
   const [result, setResult] = useState<AccuseResult | null>(null);
   const [accusedCharacterId, setAccusedCharacterId] = useState<CharacterId | null>(null);
 
-  // 게임 시작 시 캐스팅 랜덤 배정 (인트로 화면과 별개로 백그라운드에서 미리 불러온다)
+  // 이어하기 — 로컬 저장된 게임이 있으면 새 캐스팅을 부르기 전에 먼저 물어본다.
+  const [resumeChoicePending, setResumeChoicePending] = useState(true);
+  const [resumeCandidate, setResumeCandidate] = useState<SavedGameState | null>(null);
+
   useEffect(() => {
+    const saved = loadGame();
+    if (saved && (saved.phase === "round" || saved.phase === "accusation")) {
+      setResumeCandidate(saved);
+    } else {
+      setResumeChoicePending(false);
+    }
+  }, []);
+
+  function resumeSavedGame() {
+    if (!resumeCandidate) return;
+    setCastingToken(resumeCandidate.castingToken);
+    setCharacters(resumeCandidate.characters);
+    setRound(resumeCandidate.round);
+    setActiveCharacterId(resumeCandidate.activeCharacterId);
+    setConversations(resumeCandidate.conversations);
+    setLockedCharacters(new Set(resumeCandidate.lockedCharacters));
+    setCollectedEvidenceIds(new Set(resumeCandidate.collectedEvidenceIds));
+    setTotalQuestionChars(resumeCandidate.totalQuestionChars);
+    setNotes(resumeCandidate.notes);
+    setPhase(resumeCandidate.phase);
+    setIntroSeen(true);
+    setResumeCandidate(null);
+    setResumeChoicePending(false);
+  }
+
+  function startFreshGame() {
+    clearGame();
+    setResumeCandidate(null);
+    setResumeChoicePending(false);
+  }
+
+  // 게임 시작 시 캐스팅 랜덤 배정 (인트로 화면과 별개로 백그라운드에서 미리 불러온다)
+  // 이어하기 여부가 결정되기 전에는(resumeChoicePending) 새 캐스팅을 부르지 않는다.
+  useEffect(() => {
+    if (resumeChoicePending) return;
+    if (castingToken) return; // 이어하기로 이미 캐스팅이 채워진 경우 재요청하지 않는다.
     let cancelled = false;
     (async () => {
       try {
@@ -62,7 +104,43 @@ export default function GameApp() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [resumeChoicePending, castingToken]);
+
+  // 라운드/심문 진행 중에는 매 변경마다 로컬에 자동 저장한다.
+  useEffect(() => {
+    if (phase !== "round" && phase !== "accusation") return;
+    if (!castingToken) return;
+    saveGame({
+      phase,
+      castingToken,
+      characters,
+      round,
+      activeCharacterId,
+      conversations,
+      lockedCharacters: Array.from(lockedCharacters),
+      collectedEvidenceIds: Array.from(collectedEvidenceIds),
+      totalQuestionChars,
+      notes,
+      savedAt: Date.now(),
+    });
+  }, [
+    phase,
+    castingToken,
+    characters,
+    round,
+    activeCharacterId,
+    conversations,
+    lockedCharacters,
+    collectedEvidenceIds,
+    totalQuestionChars,
+    notes,
+  ]);
+
+  // 게임이 끝나면(결과 화면 도달) 저장된 이어하기 데이터를 지운다 — 끝난 게임을 다시
+  // "이어하기"로 제안하지 않기 위함.
+  useEffect(() => {
+    if (phase === "result") clearGame();
+  }, [phase]);
 
   // 라운드가 바뀔 때마다 진술 증거(클릭 불필요)는 자동으로 확보 처리
   useEffect(() => {
@@ -185,6 +263,37 @@ export default function GameApp() {
     }
   }
 
+  if (resumeCandidate) {
+    return (
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-6 px-4 py-16 text-center">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-neutral-500">
+            NAN 2026 · 머더 미스터리
+          </p>
+          <h1 className="mt-2 text-lg font-bold">진행 중이던 게임이 있습니다</h1>
+          <p className="mt-2 text-sm text-neutral-400">
+            라운드 {resumeCandidate.round} / {TOTAL_ROUNDS}까지 진행된 기록이 이 브라우저에
+            저장되어 있습니다. 이어서 하시겠습니까?
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={resumeSavedGame}
+            className="rounded-md bg-blue-700 px-5 py-2.5 text-sm font-medium hover:bg-blue-600 transition-colors"
+          >
+            이어하기
+          </button>
+          <button
+            onClick={startFreshGame}
+            className="rounded-md border border-neutral-700 px-5 py-2.5 text-sm font-medium text-neutral-300 hover:border-neutral-500 transition-colors"
+          >
+            새로 시작
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!introSeen) {
     return <IntroScreen onContinue={() => setIntroSeen(true)} />;
   }
@@ -236,11 +345,14 @@ export default function GameApp() {
       </header>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
-        <InvestigationBoard
-          round={round}
-          collectedIds={collectedEvidenceIds}
-          onCollect={handleCollectEvidence}
-        />
+        <div className="flex flex-col gap-4">
+          <InvestigationBoard
+            round={round}
+            collectedIds={collectedEvidenceIds}
+            onCollect={handleCollectEvidence}
+          />
+          <NotesPanel value={notes} onChange={setNotes} />
+        </div>
 
         <div className="flex flex-col gap-3">
           <div className="flex gap-2">

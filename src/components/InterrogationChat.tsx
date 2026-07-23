@@ -18,15 +18,6 @@ interface InterrogationChatProps {
   onSend: () => void;
 }
 
-// 주의: "동요" 라벨은 진범의 붕괴 상태와 무고자의 비밀 노출 상태가 공유한다 — 일부러
-// 같은 색으로 스타일링해 라벨만 보고 범인을 추측할 수 없게 한다 (actor-prompt.ts 참고).
-const MODE_LABEL: Record<string, { label: string; className: string }> = {
-  답변: { label: "답변", className: "bg-emerald-900/60 text-emerald-300" },
-  거짓말유지: { label: "거짓말 유지", className: "bg-amber-900/60 text-amber-300" },
-  동요: { label: "동요", className: "bg-orange-900/60 text-orange-300" },
-  미분류: { label: "미분류", className: "bg-neutral-800 text-neutral-400" },
-};
-
 export default function InterrogationChat({
   displayName,
   roleTitle,
@@ -78,15 +69,6 @@ export default function InterrogationChat({
                   : "bg-neutral-800 text-neutral-100"
               }`}
             >
-              {m.role === "assistant" && m.mode && (
-                <span
-                  className={`mb-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                    MODE_LABEL[m.mode]?.className ?? MODE_LABEL["미분류"].className
-                  }`}
-                >
-                  {MODE_LABEL[m.mode]?.label ?? m.mode}
-                </span>
-              )}
               <div>{m.content}</div>
             </div>
           </div>
