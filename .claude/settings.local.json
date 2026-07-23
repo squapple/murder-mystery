@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"Test-Path 'C:\\\\Users\\\\steplog\\\\Downloads\\\\nan2026_handoff.zip'\")",
+      "Bash(powershell -Command \"Get-ChildItem 'C:\\\\Workspace\\\\Muder Mistery' -Force | Select-Object Name, Length, LastWriteTime\")",
+      "Bash(powershell -Command \"Expand-Archive -Path 'C:\\\\Users\\\\steplog\\\\Downloads\\\\nan2026_handoff.zip' -DestinationPath 'C:\\\\Users\\\\steplog\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Workspace-Muder-Mistery\\\\de68a850-e3d2-4b5d-bca4-ccd626f23cb9\\\\scratchpad\\\\handoff_inspect' -Force\")",
+      "Bash(powershell -Command \"Get-ChildItem -Recurse 'C:\\\\Users\\\\steplog\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Workspace-Muder-Mistery\\\\de68a850-e3d2-4b5d-bca4-ccd626f23cb9\\\\scratchpad\\\\handoff_inspect' | Select-Object FullName, Length | Format-Table -AutoSize\")",
+      "PowerShell(Get-ChildItem -Recurse 'C:\\\\Users\\\\steplog\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Workspace-Muder-Mistery\\\\de68a850-e3d2-4b5d-bca4-ccd626f23cb9\\\\scratchpad\\\\handoff_inspect' | ForEach-Object { $_.FullName.Replace\\('C:\\\\Users\\\\steplog\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Workspace-Muder-Mistery\\\\de68a850-e3d2-4b5d-bca4-ccd626f23cb9\\\\scratchpad\\\\handoff_inspect\\\\',''\\) + ' | ' + $_.Length })",
+      "PowerShell(if \\($env:ANTHROPIC_API_KEY\\) { 'SET' } else { 'NOT SET' })",
+      "PowerShell(node --version)",
+      "PowerShell(npm --version)",
+      "PowerShell(if \\($env:NVIDIA_API_KEY\\) { 'SET' } else { 'NOT SET' })",
+      "Bash(npx --yes create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm --no-turbopack)",
+      "Bash(npx --yes create-next-app@latest nan2026-app --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --use-npm --no-turbopack)",
+      "Bash(npm install *)",
+      "Bash(powershell -Command \"Get-ChildItem -Recurse src | Select-Object FullName\")",
+      "Bash(powershell -Command \"New-Item -ItemType Directory -Force -Path 'C:\\\\Workspace\\\\Muder Mistery\\\\src\\\\app\\\\api\\\\interrogate' | Out-Null; Write-Host done\")",
+      "Bash(npm run *)",
+      "Bash(powershell -Command \"Test-Path 'C:\\\\Workspace\\\\Muder Mistery\\\\.claude\\\\launch.json'\")",
+      "Bash(powershell -Command \"Get-ChildItem -Force 'C:\\\\Workspace\\\\Muder Mistery\\\\.claude'\")",
+      "WebFetch(domain:build.nvidia.com)",
+      "WebSearch",
+      "WebFetch(domain:docs.api.nvidia.com)",
+      "Bash(powershell -Command \"New-Item -ItemType Directory -Force -Path 'C:\\\\Workspace\\\\Muder Mistery\\\\src\\\\app\\\\api\\\\casting' | Out-Null; New-Item -ItemType Directory -Force -Path 'C:\\\\Workspace\\\\Muder Mistery\\\\src\\\\app\\\\api\\\\reflect' | Out-Null; Write-Host done\")",
+      "Bash(powershell -Command \"Remove-Item -Path 'C:\\\\Workspace\\\\Muder Mistery\\\\src\\\\app\\\\api\\\\reflect' -Recurse -Force -ErrorAction SilentlyContinue; Write-Host done\")",
+      "Bash(powershell -Command \"New-Item -ItemType Directory -Force -Path 'C:\\\\Workspace\\\\Muder Mistery\\\\src\\\\app\\\\api\\\\accuse' | Out-Null; Write-Host done\")",
+      "Bash(powershell -Command \"Test-Path 'C:\\\\Workspace\\\\Muder Mistery\\\\05_history_nan2026.md'\")",
+      "Bash(node -e ' *)",
+      "Bash(curl -s -X POST http://localhost:3000/api/casting)",
+      "Bash(node -e \"console.log\\(Buffer.from\\(JSON.stringify\\({'role-lee-hyunwoo':'ENFP'}\\)\\).toString\\('base64url'\\)\\)\")",
+      "Bash(curl -s -X POST http://localhost:3000/api/interrogate -H 'Content-Type: application/json' -d '{ *)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>console.log\\(JSON.stringify\\(JSON.parse\\(d\\),null,2\\)\\)\\)\")",
+      "Bash(node -e \"console.log\\(Buffer.from\\(JSON.stringify\\({'role-lee-hyunwoo':'ENTJ'}\\)\\).toString\\('base64url'\\)\\)\")",
+      "Bash(node -e \"console.log\\(Buffer.from\\(JSON.stringify\\({'role-jeong-mina':'ENFP'}\\)\\).toString\\('base64url'\\)\\)\")",
+      "Bash(gh auth *)",
+      "Bash(git config *)",
+      "Bash(git init *)",
+      "Bash(git add *)"
+    ]
+  }
+}
