@@ -4,7 +4,7 @@
 
 export const CASE_OVERVIEW = {
   victim: "김영훈, 마케팅팀장, 30대 후반(38세)",
-  timeOfDeath: "워크숍 둘째 날 새벽 23:45경",
+  timeOfDeath: "워크숍 둘째 날 밤 23:45경",
   location: "강원도 연수원 산책로",
   discoveredAt: "06:00",
   causeOfDeath: "산책로에서의 몸싸움 끝 사망",
