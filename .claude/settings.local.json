@@ -35,7 +35,21 @@
       "Bash(gh auth *)",
       "Bash(git config *)",
       "Bash(git init *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(curl -s -w \"\\\\nTotal time: %{time_total}s\\\\n\" http://localhost:3000/api/diag-nim)",
+      "Bash(timeout 30 git push origin main)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(curl -s -w \"\\\\nHTTP: %{http_code}, Total time: %{time_total}s\\\\n\" https://murder-mystery-three-zeta.vercel.app/api/diag-nim)",
+      "Bash(curl -sf -o /tmp/diag_result.json https://murder-mystery-three-zeta.vercel.app/api/diag-nim)",
+      "Read(//tmp/**)",
+      "Bash(time curl -s -w \"\\\\nHTTP: %{http_code}, Total time: %{time_total}s\\\\n\" https://murder-mystery-three-zeta.vercel.app/api/diag-nim)",
+      "Bash(curl -sf -o /tmp/diag_result2.json https://murder-mystery-three-zeta.vercel.app/api/diag-nim)",
+      "Bash(cat /tmp/diag_result2.json 2>&1)",
+      "Bash(rm -f src/app/api/diag-nim/route.ts vercel.json)",
+      "Bash(rmdir src/app/api/diag-nim)"
     ]
   }
 }
