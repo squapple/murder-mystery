@@ -59,7 +59,22 @@
       "Bash(curl -sI https://murder-mystery-three-zeta.vercel.app/api/casting -X POST)",
       "Bash(curl -s \"https://murder-mystery-three-zeta.vercel.app/?_=$\\(date +%s\\)\" -H \"Cache-Control: no-cache\")",
       "Bash(read chunk *)",
-      "Bash(curl -s https://murder-mystery-three-zeta.vercel.app/__TRACKED_VAR__)"
+      "Bash(curl -s https://murder-mystery-three-zeta.vercel.app/__TRACKED_VAR__)",
+      "Bash(git checkout *)",
+      "WebFetch(domain:developers.cloudflare.com)",
+      "Bash(npm i *)",
+      "Bash(npx opennextjs-cloudflare *)",
+      "Bash(curl -s -o /dev/null -w \"HTTP:%{http_code} TIME:%{time_total}s\\\\n\" http://127.0.0.1:8787/)",
+      "Bash(curl -s -X POST http://127.0.0.1:8787/api/casting -w \"\\\\nHTTP:%{http_code} TIME:%{time_total}s\\\\n\")",
+      "Bash(taskkill //F //IM node.exe //FI \"WINDOWTITLE eq *wrangler*\")",
+      "Bash(pkill -f \"wrangler dev\")",
+      "Bash(timeout 30 git push -u origin cloudflare-pages-experiment)",
+      "Bash(timeout 30 git push origin cloudflare-pages-experiment)",
+      "Bash(curl -s -o /dev/null -w \"HTTP:%{http_code} TIME:%{time_total}s\\\\n\" https://murder-mystery.squapple.workers.dev/)",
+      "Bash(curl -s -X POST https://murder-mystery.squapple.workers.dev/api/casting -w \"\\\\nHTTP:%{http_code} TIME:%{time_total}s\\\\n\")",
+      "Bash(time curl -s -X POST https://murder-mystery.squapple.workers.dev/api/interrogate -H \"Content-Type: application/json\" --data-binary @/tmp/cf_prod_test.json -w \"\\\\nHTTP:%{http_code} TIME:%{time_total}s\\\\n\")",
+      "Bash(git commit *)",
+      "Bash(git merge *)"
     ]
   }
 }
