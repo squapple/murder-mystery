@@ -6,6 +6,11 @@ import { NextResponse } from "next/server";
 import { randomizeCasting, encodeCastingToken } from "@/lib/casting";
 import { CHARACTER_LIST, getPlayerView } from "@/lib/game-data/characters";
 
+// Edge 런타임 실험 — Vercel Hobby 플랜의 Node 서버리스 함수가 공유 발신 IP 풀 때문에
+// NVIDIA API 호출이 9초~157초로 극심하게 널뛰는 문제를 발견해, 다른 발신 경로(Edge
+// 네트워크)를 시도해본다. 05_history_nan2026.md Phase 13 참고.
+export const runtime = "edge";
+
 export async function POST() {
   const castingMap = randomizeCasting();
   const castingToken = encodeCastingToken(castingMap);

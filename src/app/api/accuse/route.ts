@@ -20,6 +20,9 @@ import {
 } from "@/lib/prompts/actor-prompt";
 import type { CharacterId } from "@/lib/game-data/types";
 
+// Edge 런타임 실험 — 05_history_nan2026.md Phase 13 참고 (casting/route.ts 주석과 동일 이유).
+export const runtime = "edge";
+
 interface ConversationTurn {
   role: "user" | "assistant";
   content: string;
