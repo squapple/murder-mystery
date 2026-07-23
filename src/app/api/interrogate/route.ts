@@ -18,7 +18,6 @@ import {
   buildLockoutJudgeSystemPrompt,
   parseLockoutJudgeResponse,
 } from "@/lib/prompts/actor-prompt";
-import { buildStrategistSystemPrompt } from "@/lib/prompts/strategist-prompt";
 import { CHARACTERS, getActorPromptView } from "@/lib/game-data/characters";
 import { PERSONAS } from "@/lib/game-data/personas";
 import { EVIDENCE } from "@/lib/game-data/evidence";
@@ -156,40 +155,14 @@ export async function POST(req: NextRequest) {
   try {
     const client = getNimClient();
 
-    // 전략가 계층 — 매 턴 새로 회고한다 (파일 상단 주석 참고: DB 없는 서버리스 환경이라
-    // "라운드 종료" 시점을 서버가 기억할 수 없어, 매 메시지마다 최신 정보로 재계산한다).
-    // 이 결과(strategistNote)는 액터 프롬프트 조립에만 쓰이고 응답에는 절대 포함하지 않는다.
-    let strategistNote = "";
-    try {
-      const strategistCompletion = await client.chat.completions.create({
-        model: NIM_MODEL,
-        max_tokens: 512,
-        temperature: 0.7,
-        messages: [
-          {
-            role: "system",
-            content: buildStrategistSystemPrompt(
-              actorPromptView,
-              persona,
-              round,
-              revealedEvidenceFacts
-            ),
-          },
-          ...historyMessages,
-          { role: "user", content: userMessage },
-        ],
-        ...reasoningExtraParams,
-      } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming & typeof reasoningExtraParams);
-      strategistNote = strategistCompletion.choices[0]?.message?.content?.trim() ?? "";
-    } catch (strategistErr) {
-      // 전략가 호출이 실패해도 심문 자체는 계속 진행한다 (전략 없이 액터 기본 규칙만 적용).
-      console.error("[interrogate] 전략가 계층 호출 실패, 기본 규칙으로 진행:", strategistErr);
-    }
-
+    // 전략가 계층 콜을 제거했다(Phase 17) — Vercel Edge 런타임의 25초 응답 시작
+    // 제한 때문에 순차 2콜 구조가 사실상 매번 FUNCTION_INVOCATION_TIMEOUT(504)으로
+    // 이어졌다. 전략가가 하던 판단은 이미 아래 buildActorSystemPrompt 내부의
+    // 붕괴조건 카운팅·화이트리스트·페르소나 성향 힌트와 중복이었어서, 별도 LLM 호출
+    // 없이 정적으로 통합했다(actor-prompt.ts buildPersonaTendencySection 참고).
     const systemPrompt = buildActorSystemPrompt(
       actorPromptView,
       persona,
-      strategistNote,
       revealedEvidenceFacts,
       collectedIds
     );
@@ -274,7 +247,7 @@ export async function POST(req: NextRequest) {
     // internalJudgment(진범 여부와 상관된 붕괴판정 상태)는 서버 로그에만 남기고
     // 클라이언트 응답에는 절대 포함하지 않는다.
     console.log(
-      `[interrogate] model=${NIM_MODEL} character=${characterId} persona=${persona.mbtiType} round=${round} elapsedMs=${elapsedMs} mode=${parsed.mode} internalJudgment=(${parsed.internalJudgment}) actionJudgment=(${parsed.actionJudgment}) locked=${locked} strategistNote=(${strategistNote})`
+      `[interrogate] model=${NIM_MODEL} character=${characterId} persona=${persona.mbtiType} round=${round} elapsedMs=${elapsedMs} mode=${parsed.mode} internalJudgment=(${parsed.internalJudgment}) actionJudgment=(${parsed.actionJudgment}) locked=${locked}`
     );
 
     // 주의: 여기서 진범 여부와 상관된 어떤 신호도(예: "이 캐릭터만 붕괴조건 충족") 응답에

@@ -37,6 +37,14 @@
 //    않도록 명시적으로 금지한다(buildStatementGateSection). 라운드 번호가 아니라
 //    "이 물증을 실제로 들이밀었는가"가 기준이라 재플레이 유저의 순서 바꾸기 공략에도
 //    안전하다.
+// 7) Vercel Edge 런타임은 스트리밍 없는 응답을 25초 안에 시작해야 하는데, 매 턴
+//    전략가+액터를 순차 2콜로 호출하던 구조가 그 경계에 걸려 FUNCTION_INVOCATION_TIMEOUT
+//    (504)이 사실상 매번 재현됐다. 전략가 프롬프트가 하던 판단(붕괴조건 근접도 카운팅,
+//    블러핑 차단)은 이미 이 파일의 buildBreakdownSection/buildEvidenceWhitelistSection이
+//    중복으로 하고 있었고, 유일하게 남는 고유 정보(페르소나 성향별 전략 경향)는 LLM
+//    판단이 아니라 조건문으로 표현 가능해, 전략가 콜 자체를 없애고 그 성향 힌트를
+//    이 프롬프트에 정적으로 포함시켰다(buildPersonaTendencySection) — 콜 수 2→1로
+//    줄여 타임아웃과 응답속도를 동시에 해결했다.
 
 import type { ActorPromptView } from "../game-data/characters";
 import type { Persona } from "../game-data/types";
@@ -49,6 +57,17 @@ const STRATEGY_HINT: Record<Persona["interrogationStrategy"], string> = {
 
 /** 압박이 강해졌을 때의 공통 모드 라벨 — 진범/무고자 구분 없이 동일하게 쓴다. */
 const PRESSURE_LABEL = "동요";
+
+/**
+ * 페르소나 성향에 따른 전략적 경향 — 원래 별도의 전략가 LLM 콜이 매 턴 판단하던
+ * 내용이었으나(strategist-prompt.ts, 이제 삭제됨), 실제로는 압박내성 하나로 갈리는
+ * 조건문이라 LLM 판단 없이도 표현 가능해 정적 텍스트로 옮겼다(위 이력 7번 참고).
+ */
+function buildPersonaTendencySection(persona: Persona): string {
+  return persona.pressureTolerance === "낮음"
+    ? `압박내성이 낮고 코너에 몰리면 "${persona.corneredReaction}" 성향이므로, 결정적 증거가 아직 다 안 모였어도 사소한 정보는 비교적 쉽게 흘리거나 먼저 나서서 변명을 늘어놓는 등 성급하고 방어적인 태도를 취하는 경향을 반영하라.`
+    : `압박내성이 높고 코너에 몰리면 "${persona.corneredReaction}" 성향이므로, 형사가 캐물을 때까지 기다리며 꼭 필요한 최소한만 절제해서 대응하는 신중한 태도를 취하는 경향을 반영하라.`;
+}
 
 /** 신발 요청 행동 처리 지시 — 모든 배역에 공통으로 주입한다. */
 function buildShoeRequestSection(character: ActorPromptView): string {
@@ -182,7 +201,6 @@ ${buildShoeRequestSection(character)}
 export function buildActorSystemPrompt(
   character: ActorPromptView,
   persona: Persona,
-  strategistNote?: string,
   revealedEvidenceFacts: string[] = [],
   collectedEvidenceIds: Set<string> = new Set()
 ): string {
@@ -204,15 +222,12 @@ export function buildActorSystemPrompt(
 
   const statementGateSection = buildStatementGateSection(character, collectedEvidenceIds);
 
-  const strategistSection = strategistNote?.trim()
-    ? `\n\n[이번 라운드 전략 — 전략가 계층의 회고 결과, 참고만 하고 위 규칙을 절대 어기지 않는다]\n${strategistNote.trim()}`
-    : "";
-
   return `당신은 머더 미스터리 게임 속 용의자 "${character.displayName}"를 연기하는 AI다. 아래 규칙을 절대적으로 따른다.
 
 [역할 정보]
 - 이름/나이/직책: ${character.displayName}, ${character.roleTitle}
 - 성향(페르소나): ${persona.mbtiType} — 심문전략: ${persona.interrogationStrategy}(${STRATEGY_HINT[persona.interrogationStrategy]}), 압박내성: ${persona.pressureTolerance}, 코너 몰렸을 때: ${persona.corneredReaction}
+- ${buildPersonaTendencySection(persona)}
 - 진범 여부: ${character.isCulprit ? "TRUE" : "FALSE"} (플레이어에게 절대 스스로 밝히거나 암시하지 않는다)
 - ${alibiLine}
 
@@ -225,7 +240,7 @@ ${character.knownSecrets.map((s) => `- ${s}`).join("\n")}
 [진실 성서 — 이 사건에 대해 당신이 알고 있는 사실의 전부. 이 밖의 사실은 절대 지어내지 않는다]
 ${character.truthBibleFacts.map((f) => `- ${f}`).join("\n")}${witnessedSection}
 
-${behaviorSection}${statementGateSection}${strategistSection}
+${behaviorSection}${statementGateSection}
 
 [공통 절대 금지]
 - MBTI 유형명이나 "압박내성 낮음" 같은 메타 표현을 직접 언급하지 말고, 어조·태도로만 성향을 드러내라.`;
