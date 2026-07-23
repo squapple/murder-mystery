@@ -335,6 +335,18 @@ const MODE_RE = /\[?모드:\s*([^\]\n]*)\]?/;
 const JUDGMENT_RE = /\[?내부판정:\s*([^\]\n]*)\]?/;
 const ACTION_RE = /\[?행동판정:\s*([^\]\n]*)\]?/;
 
+/**
+ * 실전 관측(플레이어 스크린샷 제보): 모델이 [내부판정: ...] 래퍼로 묶지 않고
+ * "비밀노출"/"심문종료" 같은 하위 필드를 독립된 브라켓으로 따로 흘리는 사례가
+ * 있었다(예: "[비밀노출: 없음]\n[심문종료: 아니오]", 또는 앞부분만 걷어내지고
+ * ", 심문종료:아니오]"처럼 꼬리만 남는 경우). 이 값들은 실제 락아웃 판정에 전혀
+ * 쓰이지 않는다(진범은 서버 하드게이트, 무고자는 전용 판정콜로 완전히 분리됨,
+ * 위 이력 5번 참고) — 그러니 여기서는 값을 파싱할 필요 없이 화면에 안 보이도록
+ * 걷어내기만 하면 된다. 라벨 앞에 남을 수 있는 쉼표·공백까지 같이 지운다.
+ */
+const LEAKED_INTERNAL_FIELD_RE =
+  /[,、\s]*\[?\s*(비밀노출|심문종료|증거카테고리|붕괴조건충족|신발요청)\s*[:=][^\]\n]*\]?/g;
+
 /** 07_run_interrogation_test.py의 parse_mode / parse_internal_judgment 로직을 확장했다.
  * [모드]/[내부판정]/[행동판정] 세 필드를 대괄호 유무·위치(선두/말미/중복)와 무관하게
  * 모두 걷어내고 남는 텍스트를 실제 대사로 취급한다. */
@@ -347,6 +359,7 @@ export function parseActorResponse(raw: string): ParsedActorResponse {
     .replace(new RegExp(MODE_RE, "g"), "")
     .replace(new RegExp(JUDGMENT_RE, "g"), "")
     .replace(new RegExp(ACTION_RE, "g"), "")
+    .replace(LEAKED_INTERNAL_FIELD_RE, "")
     .trim();
   // 감싸고 있는 따옴표 제거
   text = text.replace(/^["“]/, "").replace(/["”]$/, "").trim();
