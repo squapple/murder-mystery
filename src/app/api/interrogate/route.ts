@@ -24,8 +24,12 @@ import { EVIDENCE } from "@/lib/game-data/evidence";
 import { resolvePersonaForCharacter } from "@/lib/casting";
 import type { CharacterId } from "@/lib/game-data/types";
 
-// Edge 런타임 실험 — 05_history_nan2026.md Phase 13 참고 (casting/route.ts 주석과 동일 이유).
-export const runtime = "edge";
+// Edge 런타임 되돌림 — Phase 18 참고. Edge는 25초 응답 마감이 있는데, 콜 수를
+// 줄여도(2→1) 여전히 매번 정확히 그 경계에서 FUNCTION_INVOCATION_TIMEOUT이 재현됐다
+// (Edge→NVIDIA 최초 연결 수립 자체가 오래 걸리는 것으로 추정 — 이전엔 2콜째가 1콜째의
+// 웜 커넥션에 얹혀가서 우연히 25초 안에 들어왔던 것으로 보인다). Node.js/Fluid Compute
+// 기본 300초 한도로 되돌려, 느리고 들쭉날쭉하더라도(9~157초) 최소한 응답은 오게 한다
+// — 100% 확정 실패보다는 낫다는 판단.
 
 interface ConversationTurn {
   role: "user" | "assistant";
