@@ -287,7 +287,26 @@
 - **Technical Rationale (Edge 시도 자체가 낭비는 아니었던 이유)**:
   - Edge 전환은 실패로 끝났지만, 이 과정에서 "우리 병목이 정확히 어디에 있는가"(네트워크 변동성 vs 응답시간 마감 vs 콜 수)를 하나씩 실측으로 좁혀나갔다 — Phase 12(레이트리밋 의심) → Phase 14(공유 IP 확정, Edge 채택) → Phase 17(Edge 25초 마감 발견, 콜 수 감소) → Phase 18(콜 수 감소로도 못 고침, Node 복귀)까지 매 단계 데이터로 가설을 검증하고 다음 가설로 넘어갔다. 최종 선택(Node 복귀)이 나쁜 소식이더라도, 그 과정에서 "우리가 구체적으로 무엇과 씨름하고 있는지"는 훨씬 선명해졌다.
 
+## Phase 19-Fix: 내부판정 브라켓 노출 버그, Vercel→Cloudflare Workers 전환 (Completed)
+
+- **내부판정 브라켓 노출(플레이어 스크린샷 제보)**: 아이패드로 플레이 중이던 사용자가 "[비밀노출: 없음]", "[심문종료: 아니오]"가 대사 위에 그대로 노출되는 스크린샷과, 같은 질문을 연달아 보냈을 때 "The string did not match the expected pattern"이라는 별개 오류가 뜨는 스크린샷을 제보했다. 원인: 모델이 가끔 `[내부판정: ...]` 래퍼로 묶지 않고 `비밀노출`/`심문종료`를 독립된 브라켓으로 따로 출력해, "내부판정" 라벨만 찾는 정규식이 놓쳤다(한 사례는 앞부분만 걷어내지고 ", 심문종료:아니오]" 꼬리만 남기도 함). 이 값들은 Phase 9 이후 실제 락아웃 판정에 전혀 쓰이지 않으므로(진범은 하드게이트, 무고자는 전용 판정콜), 값을 다시 파싱할 필요 없이 화면에서 안 보이게 걷어내기만 하면 되는 문제였다. `LEAKED_INTERNAL_FIELD_RE`를 추가해 "비밀노출/심문종료/증거카테고리/붕괴조건충족/신발요청" 라벨을 브라켓 유무·선행 쉼표와 무관하게 걷어내도록 했고, 제보받은 두 leak 문자열 그대로 유닛 테스트해 확인 후 배포했다.
+- **Vercel → Cloudflare Workers 전환**: Phase 18에서 응답 속도가 다시 불안정(47~93초)해지자, 사용자가 "로컬은 항상 빨랐다 — Vercel 쪽 문제라면 같은 역할을 하는 국내/타 플랫폼으로 옮겨볼 수 있지 않냐"고 제안했다. `cloudflare-pages-experiment` 브랜치를 새로 만들어 `main`(Vercel 배포 중)은 전혀 건드리지 않은 채 실험을 진행했다:
+  - `@opennextjs/cloudflare` + `wrangler`로 Cloudflare Workers 배포 지원 추가(`wrangler.jsonc`, `open-next.config.ts`, `nodejs_compat` 플래그).
+  - 로컬 `opennextjs-cloudflare preview`(실제 workerd 런타임)로 캐스팅·심문(openai SDK + Buffer 기반 castingToken)이 전부 정상 동작함을 먼저 확인.
+  - Cloudflare 대시보드에서 GitHub 연동 프로젝트 생성 → 처음엔 프로덕션 브랜치가 기본값 `main`으로 잡혀 빌드 실패(설정 파일이 실험 브랜치에만 있었음) → `cloudflare-pages-experiment`로 브랜치 지정 후 빌드 성공.
+  - 환경변수 설정 함정 발견: Build 설정 안의 "Variables and secrets"(빌드 시점 전용)에 넣었더니 런타임에서 `NVIDIA_API_KEY`를 못 읽음 — Worker Settings 최상단의 별도 "Variables and secrets(used at runtime)"에 Secret 타입으로 다시 넣어야 실제 요청 처리 중에도 값을 읽을 수 있었다.
+  - **실측 결과**: 배포 URL(`murder-mystery.squapple.workers.dev`)에서 interrogate 호출을 5회, 이어서 15회 반복 테스트한 결과 **1.6초~5.5초 사이에서 전부 성공**(Vercel Node: 9~157초, Vercel Edge: 100% 타임아웃과 극명히 대비) — 사용자가 지적했던 "로컬은 빠른데 Vercel만 느리다"는 관찰이 Vercel 발신 IP 풀 문제였음을 실측으로 재확인시켜준 결과였다.
+  - 사용자가 전환을 확정해, `cloudflare-pages-experiment`를 `main`에 병합하고 Cloudflare 프로젝트의 프로덕션 브랜치도 `main`으로 재설정했다(앞으로는 `main` 하나만 관리하면 Vercel·Cloudflare 양쪽에 자동 반영됨).
+  - 병합 과정에서 ESLint가 `.open-next/`(번들된 벤더 코드, 14,762개 가짜 문제 발생)를 스캔하는 걸 발견해 `eslint.config.mjs`의 ignore 목록에 추가.
+  - Vercel 배포(`murder-mystery-three-zeta.vercel.app`)는 그대로 남겨뒀다 — main이 두 플랫폼 모두에 배포되므로, Cloudflare에 문제가 생기면 Vercel이 자동으로 최신 상태의 백업 역할을 한다.
+
+- **Technical Rationale (Vercel을 완전히 버리지 않고 병행 배포로 남긴 이유)**:
+  - 두 플랫폼 다 같은 `main` 브랜치·같은 GitHub 연동 방식이라 유지 비용이 거의 들지 않는다. Cloudflare가 이후에도 계속 안정적인지 며칠 더 지켜볼 시간을 벌면서, 혹시 Cloudflare 쪽에 예상 못 한 문제(예: 공유 IP 문제가 여기서도 재현되는 경우)가 생기면 Vercel URL로 즉시 되돌아갈 수 있는 안전장치를 유지하는 게 이번 실험 전체를 "언제든 되돌릴 수 있게" 시작한 원래 원칙과 일관된다.
+
 ## 다음 단계 (Not Started)
+
+- **Cloudflare 안정성 며칠 더 관찰** — 지금까지의 15회+ 테스트는 짧은 시간 창에서의 결과다. 실제 여러 날에 걸쳐 계속 빠른지 지켜볼 필요 있음.
+- (경미) Cloudflare Workers Builds에서 `cloudflare-pages-experiment` 브랜치는 이제 쓰지 않으므로 정리(브랜치 삭제 등)가 필요하면 사용자 확인 후 진행할 것 — 삭제는 되돌리기 어려운 작업이라 먼저 묻기로 함.
 
 - **전략가 계층 부활 검토** (Phase 17 참고) — 사용자가 제시한 "친구 대리 AI" 비전대로, 속도 제약이 풀리면(유료 플랜/NAN 자체 서버 등) 별도 전략 콜을 되살리는 것을 검토할 것. 단순 복원이 아니라 "플레이어와 함께하는 AI가 여러 캐릭터의 전략을 동시에 관장"하는 방향으로 확장할 가치가 있다고 사용자가 판단함.
 - **응답 속도 변동성 대응** (Phase 18 이후 최우선 후보로 격상): Node.js 복귀로 기능은 살아났으나 47~93초대 변동은 여전하다. 재시도 로직, "생각하는 중이 오래 걸리네요" 안내 UI, 또는 유료 플랜/NAN 자체 서버로의 인프라 교체가 후보. 사용자가 최종 우선순위를 결정할 것.
