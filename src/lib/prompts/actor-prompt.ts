@@ -350,6 +350,29 @@ ${behaviorSection}${statementGateSection}
 }
 
 /**
+ * 디브리핑 말투 결정 — 실전 피드백: 세 배역의 소감이 성향과 무관하게 다들 한결같이
+ * 따뜻하고 응원하는 톤으로 나와("고생했어!", "재밌었어!" 반복) 페르소나 차이가 안
+ * 느껴진다는 지적을 받았다. 실제 친구들이 다 항상 친절하고 긍정적이지만은 않다는
+ * 것 — interrogationStrategy(T/F)·pressureTolerance를 이용해 성향별로 다른 태도를
+ * 명시적으로 지시한다(buildPersonaTendencySection이 심문 행동에 하던 것과 같은 원리).
+ */
+function buildDebriefToneSection(persona: Persona): string {
+  const strategyTone =
+    persona.interrogationStrategy === "T"
+      ? "감정을 앞세우기보다 사실·전략 위주로 담백하게 말하는 편 — 칭찬에 후하지 않고, 잘한 점/아쉬웠던 점을 논리적으로 짚는다."
+      : "감정을 편하게 드러내는 편 — 다만 무조건 따뜻하고 긍정적이지만은 않다. 서운했던 점이나 힘들었던 점도 솔직하게 말할 수 있다.";
+  const pressureTone =
+    persona.pressureTolerance === "높음"
+      ? "압박에 강한 성격답게 소감도 덤덤하고 여유 있다 — 호들갑스러운 칭찬이나 감탄은 자제한다."
+      : "압박에 약한 성격답게 소감에도 감정 기복이 크게 드러난다.";
+  return `[말투 — 반드시 반영할 것]
+${strategyTone}
+${pressureTone}
+코너에 몰렸을 때 성향("${persona.corneredReaction}")과 일관된 태도를 소감에도 유지하라.
+모든 친구가 다 따뜻하고 응원하는 태도일 필요는 없다 — 무덤덤하거나, 장난스럽게 놀리거나, 은근히 승부욕을 보이거나, 심드렁하거나, 약간 투덜대는 태도도 자연스럽다. "재밌었어", "고생했어" 같은 상투적인 마무리 인사를 매번 반복하지 않는다.`;
+}
+
+/**
  * 게임 종료 후 결과 화면 전용 — 캐릭터 연기를 내려놓고 "이 역할을 맡았던 AI 친구"로
  * 돌아와 플레이어에게 뒤풀이 소감을 말하는 디브리핑 장면(Phase 27, "AI 친구" 컨셉).
  * 원래는 진범에게만 별도의 "자백" 장면을 만들고 무고자는 결과 화면에 motiveFull
@@ -366,7 +389,7 @@ export function buildDebriefSystemPrompt(
   persona: Persona,
   wasAccused: boolean
 ): string {
-  return `게임이 끝났다. 당신은 이제 "${character.displayName}" 캐릭터 연기를 내려놓고, 그 역할을 맡아 플레이했던 AI 친구 "${persona.friendName}"(성향: ${persona.mbtiType})로 돌아와 플레이어에게 솔직하고 친근한 소감을 이야기한다. 격식 차리지 말고 실제 친구끼리 게임 끝나고 수다 떠는 듯한 말투로 답하라.
+  return `게임이 끝났다. 당신은 이제 "${character.displayName}" 캐릭터 연기를 내려놓고, 그 역할을 맡아 플레이했던 AI 친구 "${persona.friendName}"(성향: ${persona.mbtiType})로 돌아와 플레이어에게 솔직한 소감을 이야기한다. 격식 차리지 말고 실제 친구끼리 게임 끝나고 수다 떠는 듯한 말투로 답하되, 아래 [말투] 지침에 따라 성향이 실제로 드러나게 말하라.
 
 [당신이 맡았던 역할]
 - 캐릭터: ${character.displayName} (${character.roleTitle})
@@ -376,12 +399,14 @@ export function buildDebriefSystemPrompt(
 - 배정된 성향: ${persona.mbtiType}(압박내성 ${persona.pressureTolerance}, 코너에 몰리면 "${persona.corneredReaction}" 경향)
 - 플레이어의 최종 지목: ${wasAccused ? "플레이어가 당신을 범인으로 지목했다" : "플레이어는 당신을 지목하지 않았다"}
 
+${buildDebriefToneSection(persona)}
+
 [이야기할 내용 — 자연스럽게 섞어서]
 - 내가 맡은 역할이 범인이었는지 아니었는지, 어떤 입장이었는지
 - 형사(플레이어)가 심문하면서 어떤 질문이나 전략이 특히 곤란하거나 인상 깊었는지 — 아래 실제 대화 기록을 근거로 구체적으로 언급할 것(예: "그때 CCTV 얘기 꺼내셨을 때 진짜 당황했잖아요")
 - 이 캐릭터/성향을 연기하면서 스스로 느낀 점 — 쉬웠는지 어려웠는지, 왜 그런지
 - 플레이어의 최종 지목 결과에 대한 짧은 반응
-- 마지막으로 플레이어에게 짧은 인사나 소감
+- 마지막으로 짧게 마무리(단, 매번 응원·감사 인사로 끝낼 필요는 없다 — [말투] 지침에 맞는 태도로)
 
 [절대 금지]
 - 진실 성서·아래 실제 대화 기록에 없는 내용을 지어내지 않는다.
