@@ -42,7 +42,10 @@ function slugifyItemName(name: string): string {
   return name.replace(/[^\w가-힣]/g, "").slice(0, 24);
 }
 
-const REQUESTED_ITEM_RE = /\[요청물품\d*\s*[:=]\s*([^\]\n]+)\]/g;
+// 대괄호 유무와 무관하게 인식한다 — 실전 관측: 모델이 "[요청물품1: 신발]" 대신
+// 여는 대괄호 없이 "요청물품1: 신발]"처럼 출력하는 사례가 나왔다(다른 브라켓
+// 필드들과 동일한 실패 패턴, actor-prompt.ts의 MODE_RE/JUDGMENT_RE 주석 참고).
+const REQUESTED_ITEM_RE = /\[?요청물품\d*\s*[:=]\s*([^\]\n]+)\]?/g;
 
 /** buildItemRequestReviewPrompt의 출력([요청물품1: 지갑] 형식)에서 물품명 목록만 뽑는다. */
 function parseRequestedItems(raw: string): string[] {

@@ -50,6 +50,7 @@ export default function GameApp() {
     newEvidenceNames: string[];
   } | null>(null);
   const [nextRoundLoading, setNextRoundLoading] = useState(false);
+  const [lateRoundItemNames, setLateRoundItemNames] = useState<string[]>([]);
 
   const [accuseLoading, setAccuseLoading] = useState(false);
   const [accuseError, setAccuseError] = useState<string | null>(null);
@@ -240,19 +241,16 @@ export default function GameApp() {
   }
 
   /**
-   * "다음 라운드" 클릭 핸들러 — 마지막 라운드가 아니면 그 라운드의 대화 전체를
-   * /api/round-review로 검토해 소지품 요청 결과(사전 등록 물증 + 임의 물증)를
-   * 일괄 반영한 뒤, 라운드 전환 화면에 새로 확보된 증거를 보여준다. 마지막
-   * 라운드(3라운드) 종료 시에는 이 리뷰를 호출하지 않는다 — 다음 라운드 조사모드
-   * 자체가 없어 반영할 곳이 없고, "제때 조사하지 않으면 증거를 못 찾은 것"이라는
-   * 의도적 설계다(actor-prompt.ts 이력 9번 참고).
+   * "다음 라운드"/"최종 지목으로" 클릭 핸들러 — 방금 끝난 라운드의 대화 전체를
+   * /api/round-review로 검토해 소지품 요청 결과(사전 등록 물증 + 임의 물증)를 뽑는다.
+   * - 1~2라운드 종료: 다음 라운드 조사모드에 즉시 반영하고 전환 화면에 새 증거를 보여준다.
+   * - 3라운드(마지막) 종료: 다음 라운드 조사모드 자체가 없어 collectedEvidenceIds에는
+   *   반영하지 않는다(점수에 영향 없음 — "제때 조사 못하면 놓친 것"이라는 의도적 설계,
+   *   actor-prompt.ts 이력 9번 참고). 대신 결과 화면에서 "이건 너무 늦게 요청했다"는
+   *   피드백으로 보여주기 위해 lateRoundItemNames에 따로 담아둔다(사용자 제안).
    */
   async function advanceRound() {
-    if (round >= TOTAL_ROUNDS) {
-      setPhase("accusation");
-      return;
-    }
-
+    const isFinalRound = round >= TOTAL_ROUNDS;
     setNextRoundLoading(true);
     const newEvidenceNames: string[] = [];
     try {
@@ -279,37 +277,48 @@ export default function GameApp() {
         const newAdHoc: AdHocEvidenceCard[] = Array.isArray(data.adHocEvidence)
           ? data.adHocEvidence
           : [];
+        const foundNames = [
+          ...unlockedIds.map((id) => getEvidenceById(id)?.name ?? id),
+          ...newAdHoc.map((e) => e.name),
+        ];
 
-        if (unlockedIds.length > 0) {
-          setCollectedEvidenceIds((prev) => {
-            const next = new Set(prev);
-            unlockedIds.forEach((id) => next.add(id));
-            return next;
-          });
-          newEvidenceNames.push(...unlockedIds.map((id) => getEvidenceById(id)?.name ?? id));
-        }
-        if (newAdHoc.length > 0) {
-          setAdHocEvidence((prev) => [
-            ...prev,
-            ...newAdHoc.filter((e) => !prev.some((p) => p.id === e.id)),
-          ]);
-          setCollectedEvidenceIds((prev) => {
-            const next = new Set(prev);
-            newAdHoc.forEach((e) => next.add(e.id));
-            return next;
-          });
-          newEvidenceNames.push(...newAdHoc.map((e) => e.name));
+        if (isFinalRound) {
+          setLateRoundItemNames(foundNames);
+        } else {
+          if (unlockedIds.length > 0) {
+            setCollectedEvidenceIds((prev) => {
+              const next = new Set(prev);
+              unlockedIds.forEach((id) => next.add(id));
+              return next;
+            });
+          }
+          if (newAdHoc.length > 0) {
+            setAdHocEvidence((prev) => [
+              ...prev,
+              ...newAdHoc.filter((e) => !prev.some((p) => p.id === e.id)),
+            ]);
+            setCollectedEvidenceIds((prev) => {
+              const next = new Set(prev);
+              newAdHoc.forEach((e) => next.add(e.id));
+              return next;
+            });
+          }
+          newEvidenceNames.push(...foundNames);
         }
       }
     } catch {
-      // 리뷰 콜이 실패해도 라운드 진행 자체는 막지 않는다 — 이번 라운드에서 놓친
-      // 소지품 요청은 그냥 반영되지 않은 채로 다음 라운드로 넘어간다.
+      // 리뷰 콜이 실패해도 진행 자체는 막지 않는다 — 이번 라운드에서 놓친 소지품
+      // 요청은 그냥 반영되지 않은 채로 다음 단계로 넘어간다.
     } finally {
       setNextRoundLoading(false);
     }
 
-    setTransitionScreen({ round: round + 1, isFirst: false, newEvidenceNames });
-    setPhase("round-transition");
+    if (isFinalRound) {
+      setPhase("accusation");
+    } else {
+      setTransitionScreen({ round: round + 1, isFirst: false, newEvidenceNames });
+      setPhase("round-transition");
+    }
   }
 
   async function handleAccuse(characterId: CharacterId) {
@@ -417,7 +426,13 @@ export default function GameApp() {
   }
 
   if (phase === "result" && result && accusedCharacterId) {
-    return <ResultScreen result={result} accusedCharacterId={accusedCharacterId} />;
+    return (
+      <ResultScreen
+        result={result}
+        accusedCharacterId={accusedCharacterId}
+        lateRoundItemNames={lateRoundItemNames}
+      />
+    );
   }
 
   const activeCharacter = characters.find((c) => c.characterId === activeCharacterId);

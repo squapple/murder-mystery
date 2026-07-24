@@ -97,7 +97,7 @@ export default function InvestigationBoard({
               e.name(사건 핵심을 요약하는 메타 라벨) 대신, 다른 배역이 흘린 정보라는
               디제틱한 출처로만 통일해 스포일러성 라벨을 감춘다. */}
           <h3 className="mb-2 text-xs uppercase tracking-wide text-neutral-500">
-            용의자 목록에 없는 다른 팀원의 증언
+            다른 팀원의 증언
           </h3>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {statements.map((e) => (
@@ -124,7 +124,7 @@ export default function InvestigationBoard({
           >
             <div className="mb-2 flex items-start justify-between gap-3">
               <h3 className="font-semibold text-neutral-100">
-                {selected.category === "statement" ? "용의자 목록에 없는 다른 팀원의 증언" : selected.name}
+                {selected.category === "statement" ? "다른 팀원의 증언" : selected.name}
               </h3>
               <button
                 onClick={() => setSelected(null)}

@@ -5,6 +5,14 @@ import type { AccuseResult } from "@/lib/game-client-types";
 interface ResultScreenProps {
   result: AccuseResult;
   accusedCharacterId: string;
+  /**
+   * 마지막 라운드(3라운드)에 요청한 소지품 이름 목록 — 다음 라운드 조사모드가 없어
+   * 반영되지 못했으므로 점수에는 포함되지 않는다. 사용자 제안: "이건 좀 더 빨리
+   * 요청했어야 했는데" 하는 아쉬움을 결과 화면에서 알려주면 재플레이 시 학습 효과가
+   * 있을 것 같다는 아이디어 — GameApp.tsx의 advanceRound에서 3라운드 종료 시점에만
+   * round-review를 collectedEvidenceIds에 반영하지 않고 여기로 따로 넘긴다.
+   */
+  lateRoundItemNames: string[];
 }
 
 const GRADE_COLOR: Record<string, string> = {
@@ -14,7 +22,11 @@ const GRADE_COLOR: Record<string, string> = {
   C: "text-neutral-300",
 };
 
-export default function ResultScreen({ result, accusedCharacterId }: ResultScreenProps) {
+export default function ResultScreen({
+  result,
+  accusedCharacterId,
+  lateRoundItemNames,
+}: ResultScreenProps) {
   const accused = result.characters.find((c) => c.characterId === accusedCharacterId);
   const culprit = result.characters.find((c) => c.characterId === result.culpritCharacterId);
 
@@ -54,6 +66,21 @@ export default function ResultScreen({ result, accusedCharacterId }: ResultScree
           <dd className="text-right text-neutral-200">{result.score.efficiencyBonus}점</dd>
         </dl>
       </section>
+
+      {lateRoundItemNames.length > 0 && (
+        <section className="rounded-lg border border-amber-900 bg-amber-950/20 p-4">
+          <h2 className="mb-1 font-semibold text-amber-300">마지막 라운드에 요청한 물품</h2>
+          <p className="mb-2 text-xs text-neutral-400">
+            아래 물품은 3라운드에 요청되어 조사에 반영할 다음 라운드가 없었습니다. 점수에는
+            포함되지 않았습니다 — 더 일찍 확인했다면 도움이 됐을 수도 있습니다.
+          </p>
+          <ul className="space-y-1 text-sm text-neutral-200">
+            {lateRoundItemNames.map((name, i) => (
+              <li key={i}>· {name}</li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {result.confessionScene && (
         <section className="rounded-lg border border-rose-900 bg-rose-950/20 p-4">
