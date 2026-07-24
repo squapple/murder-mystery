@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import type { CharacterId } from "@/lib/game-data/types";
-import { getAvailableEvidenceForRound } from "@/lib/game-data/evidence";
+import { getAvailableEvidenceForRound, getEvidenceById } from "@/lib/game-data/evidence";
 import type {
+  AdHocEvidenceCard,
   ChatMessage,
   PlayerCharacterView,
   GamePhase,
@@ -12,6 +13,7 @@ import type {
 import { saveGame, loadGame, clearGame, type SavedGameState } from "@/lib/gameSave";
 import IntroScreen from "./IntroScreen";
 import CastingScreen from "./CastingScreen";
+import RoundTransitionScreen from "./RoundTransitionScreen";
 import InvestigationBoard from "./InvestigationBoard";
 import InterrogationChat from "./InterrogationChat";
 import AccusationScreen from "./AccusationScreen";
@@ -36,8 +38,18 @@ export default function GameApp() {
   const [errorMap, setErrorMap] = useState<Record<string, string | null>>({});
   const [lockedCharacters, setLockedCharacters] = useState<Set<string>>(new Set());
   const [collectedEvidenceIds, setCollectedEvidenceIds] = useState<Set<string>>(new Set());
+  const [adHocEvidence, setAdHocEvidence] = useState<AdHocEvidenceCard[]>([]);
   const [totalQuestionChars, setTotalQuestionChars] = useState(0);
   const [notes, setNotes] = useState("");
+
+  // 라운드 전환 화면 — 라운드가 바뀌는 시점을 명확히 보여주고, round-review로
+  // 새로 확보된 물증을 여기서 한 번에 공개한다.
+  const [transitionScreen, setTransitionScreen] = useState<{
+    round: number;
+    isFirst: boolean;
+    newEvidenceNames: string[];
+  } | null>(null);
+  const [nextRoundLoading, setNextRoundLoading] = useState(false);
 
   const [accuseLoading, setAccuseLoading] = useState(false);
   const [accuseError, setAccuseError] = useState<string | null>(null);
@@ -66,6 +78,7 @@ export default function GameApp() {
     setConversations(resumeCandidate.conversations);
     setLockedCharacters(new Set(resumeCandidate.lockedCharacters));
     setCollectedEvidenceIds(new Set(resumeCandidate.collectedEvidenceIds));
+    setAdHocEvidence(resumeCandidate.adHocEvidence ?? []);
     setTotalQuestionChars(resumeCandidate.totalQuestionChars);
     setNotes(resumeCandidate.notes);
     setPhase(resumeCandidate.phase);
@@ -108,7 +121,7 @@ export default function GameApp() {
 
   // 라운드/심문 진행 중에는 매 변경마다 로컬에 자동 저장한다.
   useEffect(() => {
-    if (phase !== "round" && phase !== "accusation") return;
+    if (phase !== "round" && phase !== "accusation" && phase !== "round-transition") return;
     if (!castingToken) return;
     saveGame({
       phase,
@@ -119,6 +132,7 @@ export default function GameApp() {
       conversations,
       lockedCharacters: Array.from(lockedCharacters),
       collectedEvidenceIds: Array.from(collectedEvidenceIds),
+      adHocEvidence,
       totalQuestionChars,
       notes,
       savedAt: Date.now(),
@@ -132,6 +146,7 @@ export default function GameApp() {
     conversations,
     lockedCharacters,
     collectedEvidenceIds,
+    adHocEvidence,
     totalQuestionChars,
     notes,
   ]);
@@ -158,7 +173,14 @@ export default function GameApp() {
 
   function startInvestigation() {
     setActiveCharacterId(characters[0]?.characterId ?? null);
-    setRound(1);
+    setTransitionScreen({ round: 1, isFirst: true, newEvidenceNames: [] });
+    setPhase("round-transition");
+  }
+
+  function continueFromTransition() {
+    if (!transitionScreen) return;
+    setRound(transitionScreen.round);
+    setTransitionScreen(null);
     setPhase("round");
   }
 
@@ -207,9 +229,6 @@ export default function GameApp() {
       if (data.locked) {
         setLockedCharacters((prev) => new Set(prev).add(characterId));
       }
-      if (data.unlockedEvidenceId) {
-        setCollectedEvidenceIds((prev) => new Set(prev).add(data.unlockedEvidenceId));
-      }
     } catch (err) {
       setErrorMap((prev) => ({
         ...prev,
@@ -220,12 +239,77 @@ export default function GameApp() {
     }
   }
 
-  function goNextRound() {
-    if (round < TOTAL_ROUNDS) {
-      setRound((r) => r + 1);
-    } else {
+  /**
+   * "다음 라운드" 클릭 핸들러 — 마지막 라운드가 아니면 그 라운드의 대화 전체를
+   * /api/round-review로 검토해 소지품 요청 결과(사전 등록 물증 + 임의 물증)를
+   * 일괄 반영한 뒤, 라운드 전환 화면에 새로 확보된 증거를 보여준다. 마지막
+   * 라운드(3라운드) 종료 시에는 이 리뷰를 호출하지 않는다 — 다음 라운드 조사모드
+   * 자체가 없어 반영할 곳이 없고, "제때 조사하지 않으면 증거를 못 찾은 것"이라는
+   * 의도적 설계다(actor-prompt.ts 이력 9번 참고).
+   */
+  async function advanceRound() {
+    if (round >= TOTAL_ROUNDS) {
       setPhase("accusation");
+      return;
     }
+
+    setNextRoundLoading(true);
+    const newEvidenceNames: string[] = [];
+    try {
+      const conversationsByCharacter = Object.fromEntries(
+        Object.entries(conversations).map(([id, msgs]) => [
+          id,
+          msgs.map((m) => ({ role: m.role, content: m.content })),
+        ])
+      );
+      const res = await fetch("/api/round-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          castingToken,
+          conversationsByCharacter,
+          collectedEvidenceIds: Array.from(collectedEvidenceIds),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const unlockedIds: string[] = Array.isArray(data.unlockedEvidenceIds)
+          ? data.unlockedEvidenceIds
+          : [];
+        const newAdHoc: AdHocEvidenceCard[] = Array.isArray(data.adHocEvidence)
+          ? data.adHocEvidence
+          : [];
+
+        if (unlockedIds.length > 0) {
+          setCollectedEvidenceIds((prev) => {
+            const next = new Set(prev);
+            unlockedIds.forEach((id) => next.add(id));
+            return next;
+          });
+          newEvidenceNames.push(...unlockedIds.map((id) => getEvidenceById(id)?.name ?? id));
+        }
+        if (newAdHoc.length > 0) {
+          setAdHocEvidence((prev) => [
+            ...prev,
+            ...newAdHoc.filter((e) => !prev.some((p) => p.id === e.id)),
+          ]);
+          setCollectedEvidenceIds((prev) => {
+            const next = new Set(prev);
+            newAdHoc.forEach((e) => next.add(e.id));
+            return next;
+          });
+          newEvidenceNames.push(...newAdHoc.map((e) => e.name));
+        }
+      }
+    } catch {
+      // 리뷰 콜이 실패해도 라운드 진행 자체는 막지 않는다 — 이번 라운드에서 놓친
+      // 소지품 요청은 그냥 반영되지 않은 채로 다음 라운드로 넘어간다.
+    } finally {
+      setNextRoundLoading(false);
+    }
+
+    setTransitionScreen({ round: round + 1, isFirst: false, newEvidenceNames });
+    setPhase("round-transition");
   }
 
   async function handleAccuse(characterId: CharacterId) {
@@ -309,6 +393,18 @@ export default function GameApp() {
     );
   }
 
+  if (phase === "round-transition" && transitionScreen) {
+    return (
+      <RoundTransitionScreen
+        round={transitionScreen.round}
+        totalRounds={TOTAL_ROUNDS}
+        isFirst={transitionScreen.isFirst}
+        newEvidenceNames={transitionScreen.newEvidenceNames}
+        onContinue={continueFromTransition}
+      />
+    );
+  }
+
   if (phase === "accusation") {
     return (
       <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 py-12">
@@ -337,10 +433,15 @@ export default function GameApp() {
           <h1 className="text-xl font-bold">라운드 {round} / {TOTAL_ROUNDS}</h1>
         </div>
         <button
-          onClick={goNextRound}
-          className="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium hover:bg-blue-600 transition-colors"
+          onClick={advanceRound}
+          disabled={nextRoundLoading}
+          className="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {round < TOTAL_ROUNDS ? "다음 라운드" : "최종 지목으로"}
+          {nextRoundLoading
+            ? "증거 정리 중..."
+            : round < TOTAL_ROUNDS
+              ? "다음 라운드"
+              : "최종 지목으로"}
         </button>
       </header>
 
@@ -349,6 +450,7 @@ export default function GameApp() {
           <InvestigationBoard
             round={round}
             collectedIds={collectedEvidenceIds}
+            adHocEvidence={adHocEvidence}
             onCollect={handleCollectEvidence}
           />
           <NotesPanel value={notes} onChange={setNotes} />

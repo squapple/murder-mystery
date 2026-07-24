@@ -73,11 +73,27 @@ export interface CharacterSheet {
   truthBibleFacts: string[];
 
   /**
-   * "신발 요청" 행동 증거의 실제 결과 (ai_only). 형사가 대화 중 신발을 보여달라고
-   * 요청하면(자유문 인식) 이 결과가 대사로 자연스럽게 드러난다. evidence.ts의
-   * 대응 물증(예: ev-shoe-soil-match)과 짝을 이룬다.
+   * 심문 중 "이 물품 좀 보여달라"는 자유문 요청에 응답할, 사전 등록된 소지품 목록
+   * (ai_only). 원래 신발 전용이었던 걸(shoeInspectionResult) 일반화했다 — 목록에 있는
+   * 물품은 "정당한 수사 요청"으로 취급해 거부 없이 반드시 응하고, evidence.ts의 대응
+   * 물증을 해금한다. 목록에 없는 물품(휴대폰, 지갑 등 뭐든)을 요청받으면 액터가
+   * 페르소나에 맞게 자유롭게 응하거나 거부하되, 실제로 응한 경우에도 그 결과 "내용"은
+   * 절대 모델이 지어내지 않는다 — 서버가 물품명+"사건과 무관" 고정 문구로만 조사모드
+   * 카드를 생성한다(진실 성서 밖 사실을 새로 만들지 않는다는 원칙 보호).
    */
-  shoeInspectionResult: string;
+  requestableItems: RequestableItem[];
+}
+
+/** CharacterSheet.requestableItems 항목 하나 — "정당한 수사 요청"으로 반드시 응해야 하는 소지품. */
+export interface RequestableItem {
+  /** 자유문 인식 실패 시 폴백 키워드 매칭과, 서버의 물품명 대조에 함께 쓰는 라벨 */
+  itemLabel: string;
+  /** 자유문 인식 보조 키워드 (예: ["신발", "구두"]) */
+  keywords: string[];
+  /** 해금할 evidence.ts 물증 id */
+  evidenceId: string;
+  /** 액터가 이 물품을 보여줄 때 대사로 자연스럽게 녹여낼 실제 결과 (내부 정보) */
+  narrativeResult: string;
 }
 
 /** 게임 시작 시 랜덤 캐스팅 결과: 배역 3개 ↔ 페르소나 8개 중 3개 매핑 */

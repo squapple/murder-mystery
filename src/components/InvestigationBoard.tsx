@@ -2,16 +2,20 @@
 
 import { useState } from "react";
 import { EVIDENCE, getAvailableEvidenceForRound, type EvidenceItem } from "@/lib/game-data/evidence";
+import type { AdHocEvidenceCard } from "@/lib/game-client-types";
 
 interface InvestigationBoardProps {
   round: number;
   collectedIds: Set<string>;
+  /** 사전 등록되지 않은 임의의 소지품 요청 결과 카드("사건과 무관" 고정) */
+  adHocEvidence: AdHocEvidenceCard[];
   onCollect: (evidenceId: string) => void;
 }
 
 export default function InvestigationBoard({
   round,
   collectedIds,
+  adHocEvidence,
   onCollect,
 }: InvestigationBoardProps) {
   const [selected, setSelected] = useState<EvidenceItem | null>(null);
@@ -22,7 +26,16 @@ export default function InvestigationBoard({
   const actionEvidence = EVIDENCE.filter(
     (e) => e.revealTiming === "action_triggered" && collectedIds.has(e.id)
   );
-  const available = [...roundEvidence, ...actionEvidence];
+  // 임의 소지품 요청 카드는 evidence.ts의 고정 목록에 없으므로 EvidenceItem 형태로
+  // 변환해 같은 그리드에 얹는다 — 내용은 항상 "사건과 무관" 고정 문구.
+  const adHocAsEvidence: EvidenceItem[] = adHocEvidence.map((e) => ({
+    id: e.id,
+    category: "physical",
+    name: e.name,
+    revealedFact: e.revealedFact,
+    revealTiming: "action_triggered",
+  }));
+  const available = [...roundEvidence, ...actionEvidence, ...adHocAsEvidence];
   const physical = available.filter((e) => e.category === "physical");
   const statements = available.filter((e) => e.category === "statement");
 
@@ -79,21 +92,24 @@ export default function InvestigationBoard({
 
       {statements.length > 0 && (
         <div className="mt-4">
+          {/* 플레이어 피드백: "박서연 다툼 이유 — 박서연-김영훈 성과 갈등" 식으로
+              사실 요약을 그대로 라벨로 노출하니 해설집을 보는 느낌이었다. 카드 제목을
+              e.name(사건 핵심을 요약하는 메타 라벨) 대신, 다른 배역이 흘린 정보라는
+              디제틱한 출처로만 통일해 스포일러성 라벨을 감춘다. */}
           <h3 className="mb-2 text-xs uppercase tracking-wide text-neutral-500">
-            심문으로 파악 가능한 진술
+            용의자 목록에 없는 다른 팀원의 증언
           </h3>
-          <ul className="space-y-1">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {statements.map((e) => (
-              <li key={e.id}>
-                <button
-                  onClick={() => setSelected(e)}
-                  className="w-full rounded px-1 py-0.5 text-left text-xs text-neutral-400 hover:bg-neutral-800/60 hover:text-neutral-200"
-                >
-                  · {e.name} — {e.revealedFact}
-                </button>
-              </li>
+              <button
+                key={e.id}
+                onClick={() => setSelected(e)}
+                className="rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-left text-sm text-neutral-300 transition-colors hover:border-blue-600 hover:bg-neutral-900"
+              >
+                {e.revealedFact}
+              </button>
             ))}
-          </ul>
+          </div>
         </div>
       )}
 
@@ -107,7 +123,9 @@ export default function InvestigationBoard({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-2 flex items-start justify-between gap-3">
-              <h3 className="font-semibold text-neutral-100">{selected.name}</h3>
+              <h3 className="font-semibold text-neutral-100">
+                {selected.category === "statement" ? "용의자 목록에 없는 다른 팀원의 증언" : selected.name}
+              </h3>
               <button
                 onClick={() => setSelected(null)}
                 className="text-neutral-500 hover:text-neutral-300"

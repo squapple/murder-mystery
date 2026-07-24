@@ -4,7 +4,12 @@
 // 같은 기기·같은 브라우저 안에서만 이어할 수 있는 가장 가벼운 방식을 택했다.
 
 import type { CharacterId } from "./game-data/types";
-import type { ChatMessage, GamePhase, PlayerCharacterView } from "./game-client-types";
+import type {
+  AdHocEvidenceCard,
+  ChatMessage,
+  GamePhase,
+  PlayerCharacterView,
+} from "./game-client-types";
 
 const SAVE_KEY = "nan2026-save-v1";
 
@@ -17,6 +22,7 @@ export interface SavedGameState {
   conversations: Record<string, ChatMessage[]>;
   lockedCharacters: string[];
   collectedEvidenceIds: string[];
+  adHocEvidence: AdHocEvidenceCard[];
   totalQuestionChars: number;
   notes: string;
   savedAt: number;

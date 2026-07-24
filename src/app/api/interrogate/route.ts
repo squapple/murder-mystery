@@ -47,29 +47,6 @@ interface InterrogateRequestBody {
   collectedEvidenceIds?: string[];
 }
 
-/** 신발 요청 행동이 배역별로 어떤 evidence id를 해금하는지 매핑 */
-const SHOE_EVIDENCE_BY_CHARACTER: Record<CharacterId, string> = {
-  "role-lee-hyunwoo": "ev-shoe-soil-match",
-  "role-park-seoyeon": "ev-shoe-park",
-  "role-jeong-mina": "ev-shoe-jeong",
-};
-
-/**
- * 실전 관측: 대화가 길어질수록(특히 3라운드) 모델이 [행동판정] 브라켓 자체를
- * 통째로 누락하는 경우가 있었다(대사 자체는 정확히 신발을 벗어주는 연기를 했는데도).
- * AI의 자유문 인식이 의도상으로는 맞았으나 구조화 출력만 누락된 경우를 위한
- * 키워드 기반 보조 감지 — [행동판정]이 명확하지 않을 때만 폴백으로 쓴다.
- */
-const SHOE_KEYWORDS = ["신발", "구두"];
-const SHOE_REQUEST_VERB_KEYWORDS = ["보여", "벗어", "확인", "제출", "달라", "주시", "달래"];
-
-function looksLikeShoeRequest(message: string): boolean {
-  return (
-    SHOE_KEYWORDS.some((k) => message.includes(k)) &&
-    SHOE_REQUEST_VERB_KEYWORDS.some((k) => message.includes(k))
-  );
-}
-
 /**
  * 진범(alibiStatus: breakable) 락아웃 하드 게이트 — LLM 판정에 전혀 의존하지 않는다.
  * "서로 다른 카테고리(A/B/C) 2개 이상이 실제로 확보됨(collectedEvidenceIds) +
@@ -235,17 +212,10 @@ export async function POST(req: NextRequest) {
     }
     const responseText = locked ? INTERROGATION_LOCKED_TEXT : parsed.text;
 
-    // 신발 요청 행동 처리 — 라운드 진행과 무관하게 즉시 해금한다. 이미 확보된 경우는
-    // 다시 내려보내지 않는다(클라이언트가 중복 알림을 띄우지 않도록).
-    let unlockedEvidenceId: string | null = null;
-    const shoeRequested =
-      /신발요청\s*[:=]\s*예/.test(parsed.actionJudgment) || looksLikeShoeRequest(userMessage);
-    if (shoeRequested) {
-      const shoeId = SHOE_EVIDENCE_BY_CHARACTER[characterId];
-      if (shoeId && !collectedIds.has(shoeId)) {
-        unlockedEvidenceId = shoeId;
-      }
-    }
+    // 소지품 요청(신발 등) 판정은 더 이상 여기서 하지 않는다 — 라운드 종료 시
+    // /api/round-review가 그 라운드 대화 전체를 한 번에 검토해 일괄 처리한다
+    // (actor-prompt.ts 이력 9번 참고: 매 턴 자기 판정 방식이 실전에서 신뢰도가
+    // 낮았고, 사전 등록 물증과 임의 물증을 같은 타이밍 규칙으로 통일하기로 함).
 
     // 05_history_nan2026.md 프로토콜4(실패 에스컬레이션): 턴 단위 구조화 로그.
     // internalJudgment(진범 여부와 상관된 붕괴판정 상태)는 서버 로그에만 남기고
@@ -261,7 +231,6 @@ export async function POST(req: NextRequest) {
       mode: parsed.mode,
       text: responseText,
       locked,
-      unlockedEvidenceId,
     });
   } catch (err) {
     console.error("[interrogate] NVIDIA NIM 호출 실패:", err);

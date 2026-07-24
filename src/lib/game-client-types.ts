@@ -16,7 +16,24 @@ export interface PlayerCharacterView {
   motivePublic: string;
 }
 
-export type GamePhase = "loading" | "casting" | "round" | "accusation" | "result";
+export type GamePhase =
+  | "loading"
+  | "casting"
+  | "round-transition"
+  | "round"
+  | "accusation"
+  | "result";
+
+/**
+ * 사전 등록되지 않은 임의의 소지품을 요청해 서버가 즉석에서 만든 조사모드 카드.
+ * 내용은 항상 "사건과 무관" 고정 문구다(액터-프롬프트 이력 9번 참고) — evidence.ts의
+ * 고정 EVIDENCE 배열에는 들어있지 않으므로 별도로 클라이언트 상태에 보관한다.
+ */
+export interface AdHocEvidenceCard {
+  id: string;
+  name: string;
+  revealedFact: string;
+}
 
 export interface ResultCharacterView {
   characterId: CharacterId;

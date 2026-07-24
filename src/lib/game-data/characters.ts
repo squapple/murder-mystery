@@ -67,8 +67,15 @@ export const CHARACTERS: Record<CharacterId, CharacterSheet> = {
       "06:00 시신 발견",
     ],
 
-    shoeInspectionResult:
-      "최근에 새로 산 신발이라 흙 반응이 전혀 없음 — 사건과 무관, 오히려 새 신발이라는 점이 약간의 의아함만 남김",
+    requestableItems: [
+      {
+        itemLabel: "신발",
+        keywords: ["신발", "구두"],
+        evidenceId: "ev-shoe-park",
+        narrativeResult:
+          "최근에 새로 산 신발이라 흙 반응이 전혀 없음 — 사건과 무관, 오히려 새 신발이라는 점이 약간의 의아함만 남김",
+      },
+    ],
   },
 
   "role-lee-hyunwoo": {
@@ -123,8 +130,15 @@ export const CHARACTERS: Record<CharacterId, CharacterSheet> = {
       "06:00 시신 발견",
     ],
 
-    shoeInspectionResult:
-      "신발 흙 성분이 산책로 흙과 완전히 일치함 — 결정적 물증. 처음엔 둘러대려 하지만 성분 분석 결과 자체는 부정할 수 없다",
+    requestableItems: [
+      {
+        itemLabel: "신발",
+        keywords: ["신발", "구두"],
+        evidenceId: "ev-shoe-soil-match",
+        narrativeResult:
+          "신발 흙 성분이 산책로 흙과 완전히 일치함 — 결정적 물증. 처음엔 둘러대려 하지만 성분 분석 결과 자체는 부정할 수 없다",
+      },
+    ],
   },
 
   "role-jeong-mina": {
@@ -168,8 +182,15 @@ export const CHARACTERS: Record<CharacterId, CharacterSheet> = {
       "06:00 시신 발견",
     ],
 
-    shoeInspectionResult:
-      "신발에서 최근 세척한 흔적이 발견됨 — 흙 성분은 검출되지 않았으나 왜 신발을 세척했는지는 석연치 않음(실제로는 법인카드 비리를 목격한 뒤 산책로 근처를 서성이다 흙탕물을 밟아 창피해서 몰래 닦은 것뿐, 살인과는 무관)",
+    requestableItems: [
+      {
+        itemLabel: "신발",
+        keywords: ["신발", "구두"],
+        evidenceId: "ev-shoe-jeong",
+        narrativeResult:
+          "신발에서 최근 세척한 흔적이 발견됨 — 흙 성분은 검출되지 않았으나 왜 신발을 세척했는지는 석연치 않음(실제로는 법인카드 비리를 목격한 뒤 산책로 근처를 서성이다 흙탕물을 밟아 창피해서 몰래 닦은 것뿐, 살인과는 무관)",
+      },
+    ],
   },
 };
 
@@ -234,7 +255,7 @@ export interface ActorPromptView {
   breakdownTriggerKeywords: string[];
   witnessedEvents: CharacterSheet["witnessedEvents"];
   truthBibleFacts: string[];
-  shoeInspectionResult: string;
+  requestableItems: CharacterSheet["requestableItems"];
 }
 
 export function getActorPromptView(character: CharacterSheet): ActorPromptView {
@@ -251,6 +272,6 @@ export function getActorPromptView(character: CharacterSheet): ActorPromptView {
     breakdownTriggerKeywords: character.breakdownTriggerKeywords,
     witnessedEvents: character.witnessedEvents,
     truthBibleFacts: character.truthBibleFacts,
-    shoeInspectionResult: character.shoeInspectionResult,
+    requestableItems: character.requestableItems,
   };
 }
