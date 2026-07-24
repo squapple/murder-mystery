@@ -16,7 +16,7 @@ export default function NotesPanel({ value, onChange }: NotesPanelProps) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={8}
-        placeholder="예: 박서연은 이현우를 싫어함. 이현우는 관리실 방문 이유를 얼버무림..."
+        placeholder="여기에 자유롭게 메모하세요."
         className="w-full resize-y rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-200 outline-none focus:border-blue-600"
       />
     </div>

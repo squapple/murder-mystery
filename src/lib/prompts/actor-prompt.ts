@@ -45,10 +45,19 @@
 //    판단이 아니라 조건문으로 표현 가능해, 전략가 콜 자체를 없애고 그 성향 힌트를
 //    이 프롬프트에 정적으로 포함시켰다(buildPersonaTendencySection) — 콜 수 2→1로
 //    줄여 타임아웃과 응답속도를 동시에 해결했다.
+// 8) 실전 플레이 피드백: (a) 강원도 산속 연수원에서 1박 2일 워크숍 중인데 "회식 끝나고
+//    집에 갔다"는 대사가 나오는 등 사건 배경과 안 맞는 발화가 관측됐다. "항상 숙소라고
+//    답하라"는 규칙을 직접 강제하는 대신, CASE_OVERVIEW.background(플레이어에게도
+//    이미 공개된 정보)를 프롬프트에 명시적으로 인지시켜 모델이 맥락에 맞게 스스로
+//    판단하도록 했다(buildCaseSettingSection). (b) 다른 용의자의 직책을 틀리게 부르는
+//    사례(예: 차장을 "대리"라고 지칭)가 관측돼, 본인 정보만 주입되고 다른 배역 정보는
+//    전혀 없었던 것을 발견 — 이름·직책(둘 다 공개 정보)을 나열하는 섹션을
+//    추가했다(buildOtherSuspectsSection).
 
-import type { ActorPromptView } from "../game-data/characters";
+import { CHARACTER_LIST, type ActorPromptView } from "../game-data/characters";
 import type { Persona } from "../game-data/types";
 import { getEvidenceById } from "../game-data/evidence";
+import { CASE_OVERVIEW } from "../game-data/truth-bible";
 
 const STRATEGY_HINT: Record<Persona["interrogationStrategy"], string> = {
   T: "형사가 사실관계·타임라인의 논리적 모순을 짚었을 때 반응 확률 상승",
@@ -63,6 +72,30 @@ const PRESSURE_LABEL = "동요";
  * 내용이었으나(strategist-prompt.ts, 이제 삭제됨), 실제로는 압박내성 하나로 갈리는
  * 조건문이라 LLM 판단 없이도 표현 가능해 정적 텍스트로 옮겼다(위 이력 7번 참고).
  */
+/**
+ * 실전 피드백: 모델이 "회식 끝나고 집에 갔다"처럼 사건 배경과 안 맞는 대사를 생성하는
+ * 사례가 관측됐다 — 강원도 산속 연수원에서 1박 2일 워크숍 중인데 "집"이 존재할 수 없다.
+ * 규칙을 직접 강제("항상 숙소라고 답하라")하는 대신, 배경 자체를 구체적으로 인지시켜
+ * 모델이 스스로 맥락에 맞게 판단하도록 했다 — 이 문단은 CASE_OVERVIEW.background와
+ * 동일한 내용이라 플레이어가 이미 사건 브리핑 화면에서 본 정보이며 스포일러가 아니다.
+ */
+function buildCaseSettingSection(): string {
+  return `[사건 배경 — 이 장소·상황을 벗어나는 답변(예: "집에 갔다")을 하지 않는다]
+${CASE_OVERVIEW.background} 사건은 이 연수원 부지 안에서 벌어졌다.`;
+}
+
+/**
+ * 실전 피드백: 박서연이 이현우를 "대리"라고 잘못 부르는 등, 다른 용의자의 직책을
+ * 모델이 추측해서 틀리는 사례가 관측됐다. 본인 정보만 주입되고 다른 배역 정보는
+ * 전혀 주어지지 않았던 게 원인 — 이름·직책은 어차피 사건 브리핑 화면에서 플레이어에게
+ * 공개되는 정보(both/player visibility)라 안전하게 추가할 수 있다.
+ */
+function buildOtherSuspectsSection(character: ActorPromptView): string {
+  const others = CHARACTER_LIST.filter((c) => c.characterId !== character.characterId);
+  return `[함께 심문받는 다른 용의자들 — 이들을 언급할 때는 반드시 아래 이름·직책을 정확히 사용한다]
+${others.map((c) => `- ${c.displayName} (${c.roleTitle})`).join("\n")}`;
+}
+
 function buildPersonaTendencySection(persona: Persona): string {
   return persona.pressureTolerance === "낮음"
     ? `압박내성이 낮고 코너에 몰리면 "${persona.corneredReaction}" 성향이므로, 결정적 증거가 아직 다 안 모였어도 사소한 정보는 비교적 쉽게 흘리거나 먼저 나서서 변명을 늘어놓는 등 성급하고 방어적인 태도를 취하는 경향을 반영하라.`
@@ -223,6 +256,10 @@ export function buildActorSystemPrompt(
   const statementGateSection = buildStatementGateSection(character, collectedEvidenceIds);
 
   return `당신은 머더 미스터리 게임 속 용의자 "${character.displayName}"를 연기하는 AI다. 아래 규칙을 절대적으로 따른다.
+
+${buildCaseSettingSection()}
+
+${buildOtherSuspectsSection(character)}
 
 [역할 정보]
 - 이름/나이/직책: ${character.displayName}, ${character.roleTitle}
