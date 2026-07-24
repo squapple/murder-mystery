@@ -39,6 +39,12 @@ export interface Persona {
   corneredReaction: string;
   /** 플레이어 공개용 태그 — 정직성 판정 표현 금지, 결과 화면에서만 공개(player_post_game) */
   playerTag: string;
+  /**
+   * "AI 친구" 컨셉(Phase 27)용 이름 — 결과 화면 뒤풀이(디브리핑)에서 이 이름으로
+   * 자기소개하며 소감을 말한다. 게임 중에는 노출되지 않고 player_post_game 시점에만
+   * 공개된다(personaTag/mbtiType과 동일한 공개 시점).
+   */
+  friendName: string;
 }
 
 /**

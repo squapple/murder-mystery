@@ -82,44 +82,41 @@ export default function ResultScreen({
         </section>
       )}
 
-      {result.confessionScene && (
-        <section className="rounded-lg border border-rose-900 bg-rose-950/20 p-4">
-          <h2 className="mb-2 font-semibold text-rose-300">
-            {culprit?.displayName ?? "진범"}의 자백
-          </h2>
-          <p className="whitespace-pre-wrap text-sm text-neutral-200">{result.confessionScene}</p>
-        </section>
-      )}
-
-      <section className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
-        <h2 className="mb-3 font-semibold text-neutral-200">전체 진실 공개</h2>
-        <div className="space-y-3">
-          {result.characters.map((c) => (
-            <div
-              key={c.characterId}
-              className={`rounded-md border p-3 ${
-                c.isCulprit ? "border-rose-800 bg-rose-950/30" : "border-neutral-800 bg-neutral-950"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-neutral-100">
-                  {c.displayName} <span className="text-xs text-neutral-500">({c.roleTitle})</span>
+      <section className="space-y-3">
+        <h2 className="font-semibold text-neutral-200">뒤풀이 — AI 친구들의 소감</h2>
+        {/* 지목한 배역이 먼저 나오도록 API가 이미 순서를 정렬해서 내려준다(accuse/route.ts) —
+            오답이었을 경우 "내가 지목한 사람의 해명 → 나머지 → 진짜 범인의 자백" 순서가
+            자연스러운 반전 구조를 만든다. */}
+        {result.characters.map((c) => (
+          <div
+            key={c.characterId}
+            className={`rounded-lg border p-4 ${
+              c.isCulprit ? "border-rose-800 bg-rose-950/20" : "border-neutral-800 bg-neutral-900/40"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-neutral-100">
+                {c.displayName} <span className="text-xs text-neutral-500">({c.roleTitle})</span>
+              </span>
+              {c.isCulprit && (
+                <span className="rounded bg-rose-900/60 px-2 py-0.5 text-xs font-medium text-rose-300">
+                  진범
                 </span>
-                {c.isCulprit && (
-                  <span className="rounded bg-rose-900/60 px-2 py-0.5 text-xs font-medium text-rose-300">
-                    진범
-                  </span>
-                )}
-              </div>
-              <p className="mt-1 text-sm text-neutral-400">{c.motiveFull}</p>
-              {c.personaTag && (
-                <p className="mt-1 text-xs text-neutral-500">
-                  성향(최초 공개): {c.personaTag} ({c.mbtiType})
-                </p>
               )}
             </div>
-          ))}
-        </div>
+            {c.friendName && (
+              <p className="mt-1 text-xs text-neutral-500">
+                이 역할을 연기한 AI 친구: {c.friendName} ({c.mbtiType}) — {c.personaTag}
+              </p>
+            )}
+            <p className="mt-2 text-xs text-neutral-500">동기: {c.motiveFull}</p>
+            {c.debrief && (
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-neutral-200">
+                {c.debrief}
+              </p>
+            )}
+          </div>
+        ))}
       </section>
     </div>
   );

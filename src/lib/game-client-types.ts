@@ -43,6 +43,10 @@ export interface ResultCharacterView {
   motiveFull: string;
   personaTag: string | null;
   mbtiType: string | null;
+  /** "AI 친구" 이름 (Phase 27) — 디브리핑에서 이 이름으로 자기소개한다. */
+  friendName: string | null;
+  /** 캐릭터 연기를 내려놓고 AI 친구로 돌아와 말하는 뒤풀이 소감. 지목한 배역이 배열 첫 번째. */
+  debrief: string;
 }
 
 export interface ScoreBreakdown {
@@ -61,6 +65,6 @@ export interface AccuseResult {
   culpritCharacterId: CharacterId;
   score: ScoreBreakdown;
   grade: "S" | "A" | "B" | "C";
+  /** 지목한 배역이 첫 번째, 나머지는 이어지는 순서 — 결과 화면은 이 순서 그대로 렌더링한다. */
   characters: ResultCharacterView[];
-  confessionScene: string;
 }
