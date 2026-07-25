@@ -17,7 +17,11 @@ export const CHARACTERS: Record<CharacterId, CharacterSheet> = {
     displayName: "박서연",
     roleTitle: "대리, 32세",
 
-    motivePublic: "본인 성과를 팀장에게 가로채였다고 느끼는 정황, 승진 심사 임박",
+    // 실전 피드백: 0라운드(캐스팅 화면)에서 동기를 너무 직접적으로("성과를 가로채였다")
+    // 알려줘 추리 여지가 줄어든다는 지적 — 태도만 암시하는 문구로 완화했다. 대신
+    // "이번 워크숍=승진 심사 마지막 관찰 기간"이라는 배경은 1라운드 물증(ev-workshop-purpose)
+    // 으로 옮겨, 플레이어가 이 정황과 각자의 태도를 스스로 연결하게 만든다.
+    motivePublic: "동료들 사이에서 능력을 인정받지만, 이번 인사철 들어 유독 예민해 보인다는 정황",
     motiveFull:
       "본인 성과를 팀장(김영훈)에게 가로채였다고 느낌. 승진 심사가 임박해 예민한 상태였음.",
 
@@ -146,7 +150,10 @@ export const CHARACTERS: Record<CharacterId, CharacterSheet> = {
     displayName: "정민아",
     roleTitle: "사원, 29세",
 
-    motivePublic: "피해자와의 과거 개인적 관계에 대한 정황",
+    // 실전 피드백: "피해자와의 과거 개인적 관계"라고 직접 명시하면 사실상 정답을
+    // 알려주는 셈이라, 이성 관계 전반에 대한 소문 정도로만 완화했다(위 박서연
+    // motivePublic 주석 참고).
+    motivePublic: "사내에서 이성 관계에 대한 소문이 종종 따라다닌다는 정황",
     motiveFull: "김영훈과 과거 연인 관계였으며, 좋지 않게 종료됨.",
 
     isCulprit: false,
