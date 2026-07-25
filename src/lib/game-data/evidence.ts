@@ -68,7 +68,11 @@ export const EVIDENCE: EvidenceItem[] = [
     id: "ev-corporate-card",
     category: "physical",
     name: "법인카드 내역",
-    revealedFact: "정민아 관련 비리 정황 (이현우와 직접 관련 없음)",
+    // 실전 피드백: "정민아 관련 비리 정황"이라는 문구가 정민아 본인이 비리를 저지른
+    // 것처럼 읽혀 오해를 샀다. 실제로는 피해자(김영훈) 본인의 오남용이고 정민아는
+    // 그걸 우연히 목격한 입장(characters.ts 정민아 knownSecrets 참고) — 당사자를
+    // 명확히 밝히도록 문구를 고쳤다.
+    revealedFact: "법인카드 오남용 정황 — 사용 당사자는 피해자(김영훈) 본인, 정민아는 이를 우연히 목격한 것으로 보임 (이현우와 직접 관련 없음)",
     revealTiming: "round1_end",
   },
   {
@@ -104,7 +108,12 @@ export const EVIDENCE: EvidenceItem[] = [
     id: "ev-shoe-soil-match",
     category: "physical",
     name: "신발흙 대조",
-    revealedFact: "이현우 신발 흙 = 산책로 흙과 일치",
+    // 실전 피드백: "= 일치"라는 단정적 문구가 얻는 즉시 "범인 확정" 도장처럼 읽혀서,
+    // 그 뒤로는 추리가 아니라 확인 사살이 된다는 지적을 받았다. 여전히 강력한
+    // 정황 증거이되 단정을 피해 여지를 남겼다 — 캐릭터 연기 지침(characters.ts
+    // requestableItems.narrativeResult)에는 "완전히 일치, 결정적 물증"이라는 내부
+    // 진실이 그대로 남아있으므로 붕괴 조건 판정 등 게임 로직에는 영향 없다.
+    revealedFact: "이현우 신발 흙 성분이 산책로 흙과 매우 유사하다 — 같은 계열의 흙으로 보인다",
     // 조사 보드 클릭이 아니라 심문 중 "신발을 보여달라"는 행동 요청으로만 해금된다
     // (10_claude_code_handoff.md 후속 피드백 — 실제 요청 행위 없이 라운드만 지나면
     // 자동 공개되던 걸 없애 몰입감을 높였다).
