@@ -12,9 +12,9 @@
 //   1) 박서연/정민아 "신발 확인" 물증(ev-shoe-park, ev-shoe-jeong)이 신규 추가되며
 //      기본물증 개수가 6→8로 늘어 만점이 165보다 커졌다 — 아래 MAX_SCORE는 항상
 //      evidence.ts 실제 데이터에서 동적으로 계산되므로 수치를 손으로 맞출 필요는 없다.
-//   2) "효율 보너스"(짧고 날카로운 질문일수록 가점) — 플레이어에게는 정확한 산정 기준을
-//      보여주지 않고 힌트 문구만 노출한다(CastingScreen 참고). 기준을 공개하면
-//      "질문 개수를 줄여야 한다"는 강박이 생겨 역효과가 난다는 판단.
+//   2) "효율 보너스"(원래는 짧고 날카로운 질문일수록 가점 — 글자 수 기준) — 이후 Phase 30에서
+//      소요 시간 기준으로 교체했다. 게임 진행 중에는 정확한 채점 기준을 노출하지 않지만,
+//      결과 화면(ResultScreen)에서는 이미 채점이 끝난 뒤이므로 기준을 그대로 알려준다.
 
 import { EVIDENCE } from "./game-data/evidence";
 import { CHARACTER_LIST } from "./game-data/characters";
@@ -63,22 +63,25 @@ const POINTS_PER_MOTIVE = 10;
 const BREAKDOWN_BONUS = 30;
 
 /**
- * 효율 보너스 — 3배역 합산 질문 글자 수(공백 포함, 토큰 수의 근사치)가 짧을수록 가점.
- * 구간은 튜닝 가능한 밸런스 값이다: 짧은 질문 10~15개(질문당 30~50자) 정도로 핵심을
- * 찌르면 만점 구간에 들어오도록 잡았다. 질문 "개수"가 아니라 "글자 수"를 기준으로 삼은
- * 이유는, 개수 기준은 플레이어에게 "질문을 아껴야 한다"는 명시적 강박을 주지만 글자 수는
- * 체감하기 어려워 오히려 자연스럽게 간결한 질문을 유도한다는 판단(사용자 피드백).
+ * 효율 보너스 — 원래는 3배역 합산 질문 글자 수 기준이었으나(짧고 날카로운 질문일수록
+ * 가점), 실전 피드백으로 "글자 수 기준이 너무 빡빡하거나 체감이 안 된다"는 지적을 받아
+ * Phase 30에서 총 소요 시간 기준으로 교체했다 — 게임 시작(1라운드 진입)부터 최종
+ * 지목까지 걸린 실제 시간을 잰다. 사용자 예시 기준("15분이면 만점, 20분이면 -2")을
+ * 그대로 반영해 구간을 잡았다.
  */
 const EFFICIENCY_BONUS_MAX = 20;
-const EFFICIENCY_TIERS: Array<{ maxChars: number; bonus: number }> = [
-  { maxChars: 400, bonus: 20 },
-  { maxChars: 700, bonus: 12 },
-  { maxChars: 1100, bonus: 6 },
+const EFFICIENCY_TIERS: Array<{ maxMinutes: number; bonus: number }> = [
+  { maxMinutes: 15, bonus: 20 },
+  { maxMinutes: 20, bonus: 18 },
+  { maxMinutes: 25, bonus: 14 },
+  { maxMinutes: 30, bonus: 8 },
+  { maxMinutes: 40, bonus: 4 },
 ];
 
-function computeEfficiencyBonus(totalQuestionChars: number): number {
+function computeEfficiencyBonus(totalElapsedSeconds: number): number {
+  const minutes = totalElapsedSeconds / 60;
   for (const tier of EFFICIENCY_TIERS) {
-    if (totalQuestionChars <= tier.maxChars) return tier.bonus;
+    if (minutes <= tier.maxMinutes) return tier.bonus;
   }
   return 0;
 }
@@ -115,8 +118,8 @@ export function gradeFromScore(score: number, maxTotal: number): Grade {
 export interface ScoreInput {
   /** 조사 모드·심문을 통해 확보한 물증·진술 evidence id 목록 */
   revealedEvidenceIds: string[];
-  /** 3배역에게 보낸 모든 질문 메시지의 총 글자 수 */
-  totalQuestionChars: number;
+  /** 게임 시작부터 최종 지목까지 걸린 총 시간(초) */
+  totalElapsedSeconds: number;
 }
 
 export function computeScore(input: ScoreInput): ScoreBreakdown {
@@ -132,7 +135,7 @@ export function computeScore(input: ScoreInput): ScoreBreakdown {
   const motivePoints = motivesRevealedCount * POINTS_PER_MOTIVE;
   const breakdownAchieved = BREAKDOWN_BONUS_EVIDENCE_IDS.every((id) => revealedSet.has(id));
   const breakdownBonus = breakdownAchieved ? BREAKDOWN_BONUS : 0;
-  const efficiencyBonus = computeEfficiencyBonus(Math.max(0, input.totalQuestionChars));
+  const efficiencyBonus = computeEfficiencyBonus(Math.max(0, input.totalElapsedSeconds));
 
   const total =
     basicEvidencePoints +

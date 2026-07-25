@@ -38,8 +38,8 @@ interface AccuseRequestBody {
   accusedCharacterId: CharacterId;
   castingToken: string;
   revealedEvidenceIds?: string[];
-  /** 3배역 합산 질문 글자 수 — 효율 보너스 판정용 */
-  totalQuestionChars?: number;
+  /** 게임 시작부터 최종 지목까지 걸린 총 시간(초) — 효율 보너스 판정용(Phase 30, 글자 수 기준에서 교체) */
+  totalElapsedSeconds?: number;
   /** 3배역 각각의 실제 심문 대화 기록 — 디브리핑이 실제 대화를 언급할 수 있게 이어붙여 쓴다 */
   conversationsByCharacter?: Partial<Record<CharacterId, ConversationTurn[]>>;
 }
@@ -67,8 +67,8 @@ export async function POST(req: NextRequest) {
 
   const result = judgeAccusation(accusedCharacterId, {
     revealedEvidenceIds: Array.isArray(body.revealedEvidenceIds) ? body.revealedEvidenceIds : [],
-    totalQuestionChars:
-      typeof body.totalQuestionChars === "number" ? body.totalQuestionChars : 0,
+    totalElapsedSeconds:
+      typeof body.totalElapsedSeconds === "number" ? body.totalElapsedSeconds : 0,
   });
 
   // 지목한 배역이 먼저, 나머지는 CHARACTER_LIST 순서로 이어진다.

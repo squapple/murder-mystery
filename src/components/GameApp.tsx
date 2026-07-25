@@ -22,6 +22,12 @@ import NotesPanel from "./NotesPanel";
 
 const TOTAL_ROUNDS = 3;
 
+// actor-prompt.ts의 PRESSURE_LABEL과 반드시 같은 문자열을 유지해야 한다 — 모델이
+// [모드: 동요]로 응답한 걸 그대로 감지해 탭에 인내심 경고 배지를 띄우는 용도.
+// (Phase 30 — 사용자 피드백: 인내심 시스템이 있다는 걸 플레이어가 알 방법이 없었다.
+// 진범/무고자 모두 같은 라벨을 쓰므로 이 배지 자체는 범인을 암시하지 않는다.)
+const PRESSURE_MODE_LABEL = "동요";
+
 export default function GameApp() {
   const [introSeen, setIntroSeen] = useState(false);
 
@@ -39,7 +45,9 @@ export default function GameApp() {
   const [lockedCharacters, setLockedCharacters] = useState<Set<string>>(new Set());
   const [collectedEvidenceIds, setCollectedEvidenceIds] = useState<Set<string>>(new Set());
   const [adHocEvidence, setAdHocEvidence] = useState<AdHocEvidenceCard[]>([]);
-  const [totalQuestionChars, setTotalQuestionChars] = useState(0);
+  // 효율 보너스가 시간 기반으로 바뀌며(Phase 30) 조사 시작 시각을 잰다 — 1라운드
+  // 진입(startInvestigation) 시점에 채워지고, 최종 지목 때 이 시각부터 경과한 시간을 잰다.
+  const [investigationStartedAt, setInvestigationStartedAt] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
 
   // 라운드 전환 화면 — 라운드가 바뀌는 시점을 명확히 보여주고, round-review로
@@ -80,7 +88,7 @@ export default function GameApp() {
     setLockedCharacters(new Set(resumeCandidate.lockedCharacters));
     setCollectedEvidenceIds(new Set(resumeCandidate.collectedEvidenceIds));
     setAdHocEvidence(resumeCandidate.adHocEvidence ?? []);
-    setTotalQuestionChars(resumeCandidate.totalQuestionChars);
+    setInvestigationStartedAt(resumeCandidate.investigationStartedAt ?? Date.now());
     setNotes(resumeCandidate.notes);
     setPhase(resumeCandidate.phase);
     setIntroSeen(true);
@@ -123,7 +131,7 @@ export default function GameApp() {
   // 라운드/심문 진행 중에는 매 변경마다 로컬에 자동 저장한다.
   useEffect(() => {
     if (phase !== "round" && phase !== "accusation" && phase !== "round-transition") return;
-    if (!castingToken) return;
+    if (!castingToken || investigationStartedAt === null) return;
     saveGame({
       phase,
       castingToken,
@@ -134,7 +142,7 @@ export default function GameApp() {
       lockedCharacters: Array.from(lockedCharacters),
       collectedEvidenceIds: Array.from(collectedEvidenceIds),
       adHocEvidence,
-      totalQuestionChars,
+      investigationStartedAt,
       notes,
       savedAt: Date.now(),
     });
@@ -148,7 +156,7 @@ export default function GameApp() {
     lockedCharacters,
     collectedEvidenceIds,
     adHocEvidence,
-    totalQuestionChars,
+    investigationStartedAt,
     notes,
   ]);
 
@@ -174,6 +182,7 @@ export default function GameApp() {
 
   function startInvestigation() {
     setActiveCharacterId(characters[0]?.characterId ?? null);
+    setInvestigationStartedAt(Date.now());
     setTransitionScreen({ round: 1, isFirst: true, newEvidenceNames: [] });
     setPhase("round-transition");
   }
@@ -204,7 +213,6 @@ export default function GameApp() {
     const nextHistory: ChatMessage[] = [...history, { role: "user", content: userMessage }];
     setConversations((prev) => ({ ...prev, [characterId]: nextHistory }));
     setLoadingMap((prev) => ({ ...prev, [characterId]: true }));
-    setTotalQuestionChars((prev) => prev + userMessage.length);
 
     try {
       const res = await fetch("/api/interrogate", {
@@ -333,6 +341,10 @@ export default function GameApp() {
         ])
       );
 
+      const totalElapsedSeconds = investigationStartedAt
+        ? Math.round((Date.now() - investigationStartedAt) / 1000)
+        : 0;
+
       const res = await fetch("/api/accuse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -340,7 +352,7 @@ export default function GameApp() {
           accusedCharacterId: characterId,
           castingToken,
           revealedEvidenceIds: Array.from(collectedEvidenceIds),
-          totalQuestionChars,
+          totalElapsedSeconds,
           conversationsByCharacter,
         }),
       });
@@ -438,6 +450,18 @@ export default function GameApp() {
   const activeCharacter = characters.find((c) => c.characterId === activeCharacterId);
   const activeLocked = activeCharacter ? lockedCharacters.has(activeCharacter.characterId) : false;
 
+  /** 해당 캐릭터가 잠기지 않은 상태에서 가장 최근 응답이 "동요" 모드였는지 — 인내심 경고 배지용. */
+  function isNearPatienceLimit(characterId: string): boolean {
+    if (lockedCharacters.has(characterId)) return false;
+    const history = conversations[characterId];
+    if (!history || history.length === 0) return false;
+    for (let i = history.length - 1; i >= 0; i -= 1) {
+      const msg = history[i];
+      if (msg.role === "assistant") return msg.mode === PRESSURE_MODE_LABEL;
+    }
+    return false;
+  }
+
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-6">
       <header className="flex items-center justify-between">
@@ -473,20 +497,27 @@ export default function GameApp() {
 
         <div className="flex flex-col gap-3">
           <div className="flex gap-2">
-            {characters.map((c) => (
-              <button
-                key={c.characterId}
-                onClick={() => setActiveCharacterId(c.characterId)}
-                className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
-                  activeCharacterId === c.characterId
-                    ? "border-blue-600 bg-blue-950/40 text-blue-200"
-                    : "border-neutral-800 bg-neutral-900/40 text-neutral-300 hover:border-neutral-600"
-                } ${lockedCharacters.has(c.characterId) ? "opacity-60" : ""}`}
-              >
-                {c.displayName}
-                {lockedCharacters.has(c.characterId) && " 🔒"}
-              </button>
-            ))}
+            {characters.map((c) => {
+              const nearLimit = isNearPatienceLimit(c.characterId);
+              return (
+                <button
+                  key={c.characterId}
+                  onClick={() => setActiveCharacterId(c.characterId)}
+                  title={nearLimit ? "지금 많이 동요하고 있습니다 — 인내심이 얼마 남지 않았을 수 있습니다" : undefined}
+                  className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+                    activeCharacterId === c.characterId
+                      ? "border-blue-600 bg-blue-950/40 text-blue-200"
+                      : nearLimit
+                        ? "border-amber-700 bg-amber-950/20 text-amber-200 hover:border-amber-500"
+                        : "border-neutral-800 bg-neutral-900/40 text-neutral-300 hover:border-neutral-600"
+                  } ${lockedCharacters.has(c.characterId) ? "opacity-60" : ""}`}
+                >
+                  {c.displayName}
+                  {lockedCharacters.has(c.characterId) && " 🔒"}
+                  {!lockedCharacters.has(c.characterId) && nearLimit && " ⚠️"}
+                </button>
+              );
+            })}
           </div>
 
           {activeCharacter && (

@@ -23,7 +23,9 @@ export interface SavedGameState {
   lockedCharacters: string[];
   collectedEvidenceIds: string[];
   adHocEvidence: AdHocEvidenceCard[];
-  totalQuestionChars: number;
+  /** 게임 시작 시각(epoch ms) — 효율 보너스가 시간 기반으로 바뀌며(Phase 30) 이어하기 시에도
+   * 원래 시작 시점부터 경과 시간을 잴 수 있도록 totalQuestionChars 대신 이걸 저장한다. */
+  investigationStartedAt: number;
   notes: string;
   savedAt: number;
 }

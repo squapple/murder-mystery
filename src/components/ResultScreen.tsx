@@ -62,9 +62,17 @@ export default function ResultScreen({
           <dd className="text-right text-neutral-200">{result.score.motivePoints}점</dd>
           <dt>붕괴 보너스</dt>
           <dd className="text-right text-neutral-200">{result.score.breakdownBonus}점</dd>
-          <dt>심문 효율</dt>
+          <dt>심문 효율(소요 시간)</dt>
           <dd className="text-right text-neutral-200">{result.score.efficiencyBonus}점</dd>
         </dl>
+        {/* 실전 피드백: "심문 효율 0점이 왜인지 모르겠다"는 지적 — 채점 기준을 게임 중에
+            공개하면 전략적 강박을 유발하지만, 이미 채점이 끝난 결과 화면에서는 알려줘도
+            무방하다는 판단(Phase 30). */}
+        <p className="mt-3 text-[11px] leading-relaxed text-neutral-500">
+          기본물증 5점, 연계물증 15점, 진술증거 15점(개당) · 동기 파악 배역당 10점 · 붕괴
+          보너스는 결정적 물증을 모두 확보했을 때 30점 · 심문 효율은 게임 시작부터 최종
+          지목까지 걸린 시간이 짧을수록 최대 20점(15분 이내 만점, 이후 구간별로 감점).
+        </p>
       </section>
 
       {lateRoundItemNames.length > 0 && (
