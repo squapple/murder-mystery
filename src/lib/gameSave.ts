@@ -21,6 +21,9 @@ export interface SavedGameState {
   activeCharacterId: CharacterId | null;
   conversations: Record<string, ChatMessage[]>;
   lockedCharacters: string[];
+  /** Phase 32 — 진범 하드게이트 2단계(경고 후 잠금) 도입으로 추가. 구버전 저장 데이터엔
+   * 없을 수 있어 GameApp.tsx에서 읽을 때 `?? []`로 방어한다. */
+  warnedCharacters?: string[];
   collectedEvidenceIds: string[];
   adHocEvidence: AdHocEvidenceCard[];
   /** 게임 시작 시각(epoch ms) — 효율 보너스가 시간 기반으로 바뀌며(Phase 30) 이어하기 시에도

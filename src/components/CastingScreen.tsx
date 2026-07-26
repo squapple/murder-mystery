@@ -2,6 +2,7 @@
 
 import type { PlayerCharacterView } from "@/lib/game-client-types";
 import { PUBLIC_CASE_BRIEF } from "@/lib/game-data/truth-bible";
+import { SCORING_SUMMARY } from "@/lib/scoring";
 
 interface CastingScreenProps {
   loading: boolean;
@@ -57,6 +58,30 @@ export default function CastingScreen({
             </div>
           ))}
         </div>
+      </section>
+
+      {/* Phase 32 — 실전 리뷰 피드백: 채점 기준(특히 심문 효율의 시간 제한)이 게임
+          중에는 전혀 안내되지 않다가 결과 화면에서야 처음 공개돼 "숨겨진 타임어택"처럼
+          느껴진다는 지적. 진범 특정만 하면 끝나버리는 걸 막으려고 점수 시스템을 넣은
+          것이었으니, 오히려 시작 전에 서브퀘스트처럼 미리 밝히는 게 취지에 맞다는
+          판단(사용자)으로 여기 추가했다. */}
+      <section className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4 text-sm">
+        <h2 className="mb-2 font-semibold text-neutral-200">채점 기준</h2>
+        <ul className="space-y-1 text-xs text-neutral-400">
+          <li>
+            · 증거 수집 — 현장 곳곳의 증거를 찾아낼 때마다 점수가 쌓입니다 (전체{" "}
+            {SCORING_SUMMARY.evidenceTotalCount}개, 개당 {SCORING_SUMMARY.pointsPerEvidence}점)
+          </li>
+          <li>
+            · 동기 파악 — 용의자별 동기를 밝혀낼 때마다 점수가 쌓입니다 (배역당{" "}
+            {SCORING_SUMMARY.pointsPerMotive}점)
+          </li>
+          <li>
+            · 심문 효율 — 조사 시작부터 최종 지목까지 걸린 시간이 짧을수록 유리합니다
+            ({SCORING_SUMMARY.efficiencyTopTierMinutes}분 이내 만점 {SCORING_SUMMARY.efficiencyBonusMax}
+            점, 오래 걸릴수록 감점)
+          </li>
+        </ul>
       </section>
 
       <p className="text-center text-xs text-neutral-500">

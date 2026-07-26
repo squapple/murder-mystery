@@ -13,6 +13,9 @@ interface ResultScreenProps {
    * round-review를 collectedEvidenceIds에 반영하지 않고 여기로 따로 넘긴다.
    */
   lateRoundItemNames: string[];
+  /** 실전 리뷰 피드백: 결과 화면에 재도전 수단이 전혀 없었다 — 캐주얼 파티 게임에서
+   * 치명적인 누락이라는 지적을 받아 추가했다. */
+  onRestart: () => void;
 }
 
 const GRADE_COLOR: Record<string, string> = {
@@ -26,6 +29,7 @@ export default function ResultScreen({
   result,
   accusedCharacterId,
   lateRoundItemNames,
+  onRestart,
 }: ResultScreenProps) {
   const accused = result.characters.find((c) => c.characterId === accusedCharacterId);
   const culprit = result.characters.find((c) => c.characterId === result.culpritCharacterId);
@@ -52,26 +56,22 @@ export default function ResultScreen({
           <span className="text-base font-normal text-neutral-500"> / {result.score.maxTotal}</span>
         </p>
         <dl className="mt-3 grid grid-cols-2 gap-y-1 text-xs text-neutral-400">
-          <dt>기본물증</dt>
-          <dd className="text-right text-neutral-200">{result.score.basicEvidencePoints}점</dd>
-          <dt>연계물증</dt>
-          <dd className="text-right text-neutral-200">{result.score.linkedEvidencePoints}점</dd>
-          <dt>진술증거</dt>
-          <dd className="text-right text-neutral-200">{result.score.statementEvidencePoints}점</dd>
+          <dt>증거 수집</dt>
+          <dd className="text-right text-neutral-200">
+            {result.score.evidenceFoundCount}/{result.score.evidenceTotalCount}개 ·{" "}
+            {result.score.evidenceCollectionPoints}점
+          </dd>
           <dt>동기 파악</dt>
           <dd className="text-right text-neutral-200">{result.score.motivePoints}점</dd>
-          <dt>붕괴 보너스</dt>
-          <dd className="text-right text-neutral-200">{result.score.breakdownBonus}점</dd>
           <dt>심문 효율(소요 시간)</dt>
           <dd className="text-right text-neutral-200">{result.score.efficiencyBonus}점</dd>
         </dl>
-        {/* 실전 피드백: "심문 효율 0점이 왜인지 모르겠다"는 지적 — 채점 기준을 게임 중에
-            공개하면 전략적 강박을 유발하지만, 이미 채점이 끝난 결과 화면에서는 알려줘도
-            무방하다는 판단(Phase 30). */}
+        {/* Phase 32 — 채점 기준은 이제 사건 브리핑 화면에서 게임 시작 전에 미리 공개된다
+            (CastingScreen). 여기서는 실제 집계 결과만 다시 확인시켜준다. */}
         <p className="mt-3 text-[11px] leading-relaxed text-neutral-500">
-          기본물증 5점, 연계물증 15점, 진술증거 15점(개당) · 동기 파악 배역당 10점 · 붕괴
-          보너스는 결정적 물증을 모두 확보했을 때 30점 · 심문 효율은 게임 시작부터 최종
-          지목까지 걸린 시간이 짧을수록 최대 20점(15분 이내 만점, 이후 구간별로 감점).
+          증거 수집은 확보한 증거 개수당 5점 · 동기 파악은 배역당 10점 · 심문 효율은 게임
+          시작부터 최종 지목까지 걸린 시간이 짧을수록 최대 20점(15분 이내 만점, 이후
+          구간별로 감점).
         </p>
       </section>
 
@@ -126,6 +126,15 @@ export default function ResultScreen({
           </div>
         ))}
       </section>
+
+      <div className="flex justify-center pt-2">
+        <button
+          onClick={onRestart}
+          className="rounded-md bg-blue-700 px-6 py-2.5 text-sm font-medium hover:bg-blue-600 transition-colors"
+        >
+          다시 도전하기
+        </button>
+      </div>
     </div>
   );
 }

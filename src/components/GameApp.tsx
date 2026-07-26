@@ -28,6 +28,14 @@ const TOTAL_ROUNDS = 3;
 // 진범/무고자 모두 같은 라벨을 쓰므로 이 배지 자체는 범인을 암시하지 않는다.)
 const PRESSURE_MODE_LABEL = "동요";
 
+/** MM:SS 형식으로 경과 시간 표시 — 헤더의 실시간 타이머용(Phase 32). */
+function formatElapsedTime(elapsedMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
 interface InterrogateStreamResult {
   mode: string;
   text: string;
@@ -98,6 +106,11 @@ export default function GameApp() {
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
   const [errorMap, setErrorMap] = useState<Record<string, string | null>>({});
   const [lockedCharacters, setLockedCharacters] = useState<Set<string>>(new Set());
+  // Phase 32 — 진범 하드게이트를 "경고 후 잠금" 2단계로 나누며, 이미 한 번 경고를
+  // 받은 캐릭터인지 서버에 알려줘야 해서 추가했다. mode==="동요"가 뜬 캐릭터는
+  // 무고자든 진범이든 대칭적으로 여기 추가된다 — 서버는 breakable 캐릭터에서만
+  // 이 값을 실제로 사용하고, 무고자에겐 그냥 무시되는 값이라 안전하다.
+  const [warnedCharacters, setWarnedCharacters] = useState<Set<string>>(new Set());
   const [collectedEvidenceIds, setCollectedEvidenceIds] = useState<Set<string>>(new Set());
   const [adHocEvidence, setAdHocEvidence] = useState<AdHocEvidenceCard[]>([]);
   // 효율 보너스가 시간 기반으로 바뀌며(Phase 30) 조사 시작 시각을 잰다 — 1라운드
@@ -141,6 +154,7 @@ export default function GameApp() {
     setActiveCharacterId(resumeCandidate.activeCharacterId);
     setConversations(resumeCandidate.conversations);
     setLockedCharacters(new Set(resumeCandidate.lockedCharacters));
+    setWarnedCharacters(new Set(resumeCandidate.warnedCharacters ?? []));
     setCollectedEvidenceIds(new Set(resumeCandidate.collectedEvidenceIds));
     setAdHocEvidence(resumeCandidate.adHocEvidence ?? []);
     setInvestigationStartedAt(resumeCandidate.investigationStartedAt ?? Date.now());
@@ -155,6 +169,36 @@ export default function GameApp() {
     clearGame();
     setResumeCandidate(null);
     setResumeChoicePending(false);
+  }
+
+  /**
+   * 결과 화면 "다시 도전하기" — 실전 리뷰 피드백(Phase 32): 결과 화면에서 재도전할
+   * 방법이 전혀 없었다는 지적. castingToken을 비워 캐스팅 재요청 useEffect가 다시
+   * 돌게 하고 나머지 라운드 상태를 전부 초기화한다. introSeen은 유지해 프롤로그를
+   * 또 보여주지 않는다.
+   */
+  function restartGame() {
+    clearGame();
+    setPhase("loading");
+    setCastingToken(null);
+    setCharacters([]);
+    setRound(1);
+    setActiveCharacterId(null);
+    setConversations({});
+    setInputs({});
+    setLoadingMap({});
+    setErrorMap({});
+    setLockedCharacters(new Set());
+    setWarnedCharacters(new Set());
+    setCollectedEvidenceIds(new Set());
+    setAdHocEvidence([]);
+    setInvestigationStartedAt(null);
+    setNotes("");
+    setTransitionScreen(null);
+    setLateRoundItemNames([]);
+    setAccuseError(null);
+    setResult(null);
+    setAccusedCharacterId(null);
   }
 
   // 게임 시작 시 캐스팅 랜덤 배정 (인트로 화면과 별개로 백그라운드에서 미리 불러온다)
@@ -195,6 +239,7 @@ export default function GameApp() {
       activeCharacterId,
       conversations,
       lockedCharacters: Array.from(lockedCharacters),
+      warnedCharacters: Array.from(warnedCharacters),
       collectedEvidenceIds: Array.from(collectedEvidenceIds),
       adHocEvidence,
       investigationStartedAt,
@@ -209,6 +254,7 @@ export default function GameApp() {
     activeCharacterId,
     conversations,
     lockedCharacters,
+    warnedCharacters,
     collectedEvidenceIds,
     adHocEvidence,
     investigationStartedAt,
@@ -234,6 +280,16 @@ export default function GameApp() {
       return next;
     });
   }, [phase, round]);
+
+  // Phase 32 — 채점 기준을 시작 전에 미리 공개하기로 하면서, 소요 시간도 결과 화면에서만
+  // 알게 되는 대신 진행 중 헤더에 실시간으로 보여주기로 했다(사용자 요청). 1초마다
+  // 현재 시각을 갱신해 investigationStartedAt과의 차이를 렌더링에 반영한다.
+  const [nowTick, setNowTick] = useState(Date.now());
+  useEffect(() => {
+    if (investigationStartedAt === null || phase === "result") return;
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [investigationStartedAt, phase]);
 
   function startInvestigation() {
     setActiveCharacterId(characters[0]?.characterId ?? null);
@@ -280,6 +336,7 @@ export default function GameApp() {
           userMessage,
           round,
           collectedEvidenceIds: Array.from(collectedEvidenceIds),
+          alreadyWarned: warnedCharacters.has(characterId),
         }),
       });
       if (!res.ok) {
@@ -293,6 +350,14 @@ export default function GameApp() {
         ...prev,
         [characterId]: [...nextHistory, { role: "assistant", content: data.text, mode: data.mode }],
       }));
+
+      // Phase 32 — "동요" 모드가 뜬 캐릭터는 경고를 받은 것으로 기록해둔다. 진범
+      // 하드게이트가 "경고 후 잠금" 2단계로 바뀌면서, 다음 턴에 다시 조건이 충족될 때
+      // 서버가 이 캐릭터는 이미 경고받았다는 걸 알아야 실제로 잠글 수 있다(무고자에게는
+      // 이 값이 그냥 무시되므로 대칭적으로 기록해도 안전하다).
+      if (data.mode === PRESSURE_MODE_LABEL) {
+        setWarnedCharacters((prev) => new Set(prev).add(characterId));
+      }
 
       if (data.locked) {
         setLockedCharacters((prev) => new Set(prev).add(characterId));
@@ -502,6 +567,7 @@ export default function GameApp() {
         result={result}
         accusedCharacterId={accusedCharacterId}
         lateRoundItemNames={lateRoundItemNames}
+        onRestart={restartGame}
       />
     );
   }
@@ -530,17 +596,24 @@ export default function GameApp() {
           </p>
           <h1 className="text-xl font-bold">라운드 {round} / {TOTAL_ROUNDS}</h1>
         </div>
-        <button
-          onClick={advanceRound}
-          disabled={nextRoundLoading}
-          className="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {nextRoundLoading
-            ? "증거 정리 중..."
-            : round < TOTAL_ROUNDS
-              ? "다음 라운드"
-              : "최종 지목으로"}
-        </button>
+        <div className="flex items-center gap-3">
+          {investigationStartedAt !== null && (
+            <span className="font-mono text-sm text-neutral-400" title="경과 시간(심문 효율 점수에 반영됩니다)">
+              ⏱ {formatElapsedTime(nowTick - investigationStartedAt)}
+            </span>
+          )}
+          <button
+            onClick={advanceRound}
+            disabled={nextRoundLoading}
+            className="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {nextRoundLoading
+              ? "증거 정리 중..."
+              : round < TOTAL_ROUNDS
+                ? "다음 라운드"
+                : "최종 지목으로"}
+          </button>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">

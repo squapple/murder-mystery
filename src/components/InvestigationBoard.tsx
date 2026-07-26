@@ -46,59 +46,66 @@ export default function InvestigationBoard({
   }
 
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
-      <h2 className="mb-1 font-semibold text-neutral-200">조사 모드</h2>
-      <p className="mb-3 text-xs text-neutral-500">
-        카드를 클릭하면 물증으로 확보되어 심문 중 근거로 제시할 수 있습니다. 확보된(✓) 카드를 다시
-        클릭하면 상세 내용을 볼 수 있습니다.
-      </p>
+    <div className="flex flex-col gap-4">
+      <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
+        <h2 className="mb-1 font-semibold text-neutral-200">조사 모드</h2>
+        <p className="mb-3 text-xs text-neutral-500">
+          카드를 클릭하면 물증으로 확보되어 심문 중 근거로 제시할 수 있습니다. 확보된(✓) 카드를 다시
+          클릭하면 상세 내용을 볼 수 있습니다.
+        </p>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {physical.map((e) => {
-          const locked = Boolean(e.requiresEvidenceId && !collectedIds.has(e.requiresEvidenceId));
-          const collected = collectedIds.has(e.id);
-          return (
-            <button
-              key={e.id}
-              disabled={locked}
-              onClick={() => handleCardClick(e, locked, collected)}
-              className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
-                collected
-                  ? "border-emerald-800 bg-emerald-950/40 text-emerald-300 hover:border-emerald-600"
-                  : locked
-                    ? "cursor-not-allowed border-neutral-800 bg-neutral-950/40 text-neutral-600"
-                    : "border-neutral-700 bg-neutral-950 text-neutral-200 hover:border-blue-600 hover:bg-neutral-900"
-              }`}
-            >
-              <div className="font-medium">
-                {collected ? "✓ " : locked ? "🔒 " : ""}
-                {e.name}
-              </div>
-              {(collected || !locked) && (
-                <div className="mt-0.5 text-xs text-neutral-400">{e.revealedFact}</div>
-              )}
-              {locked && (
-                <div className="mt-0.5 text-xs text-neutral-600">다른 물증을 먼저 확보하세요</div>
-              )}
-              {!locked && (
-                <div className="mt-1 text-[10px] text-neutral-500">
-                  {collected ? "클릭해서 자세히 보기" : "클릭해서 확보하기"}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {physical.map((e) => {
+            const locked = Boolean(e.requiresEvidenceId && !collectedIds.has(e.requiresEvidenceId));
+            const collected = collectedIds.has(e.id);
+            return (
+              <button
+                key={e.id}
+                disabled={locked}
+                onClick={() => handleCardClick(e, locked, collected)}
+                className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+                  collected
+                    ? "border-emerald-800 bg-emerald-950/40 text-emerald-300 hover:border-emerald-600"
+                    : locked
+                      ? "cursor-not-allowed border-neutral-800 bg-neutral-950/40 text-neutral-600"
+                      : "border-neutral-700 bg-neutral-950 text-neutral-200 hover:border-blue-600 hover:bg-neutral-900"
+                }`}
+              >
+                <div className="font-medium">
+                  {collected ? "✓ " : locked ? "🔒 " : ""}
+                  {e.name}
                 </div>
-              )}
-            </button>
-          );
-        })}
+                {(collected || !locked) && (
+                  <div className="mt-0.5 text-xs text-neutral-400">{e.revealedFact}</div>
+                )}
+                {locked && (
+                  <div className="mt-0.5 text-xs text-neutral-600">다른 물증을 먼저 확보하세요</div>
+                )}
+                {!locked && (
+                  <div className="mt-1 text-[10px] text-neutral-500">
+                    {collected ? "클릭해서 자세히 보기" : "클릭해서 확보하기"}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {statements.length > 0 && (
-        <div className="mt-4">
+        // Phase 32 — 실전 리뷰 피드백: "확보된 카드를 클릭하라"는 안내문은 조사 모드
+        // 섹션에만 있고, 이 섹션엔 클릭 가능하다는 안내 자체가 없어서 플레이어가 아예
+        // 클릭해볼 생각을 못 했다는 지적. 조사 모드와 똑같이 독립된 박스 + 안내문을
+        // 갖춘 별도 섹션으로 분리했다.
+        <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
           {/* 플레이어 피드백: "박서연 다툼 이유 — 박서연-김영훈 성과 갈등" 식으로
               사실 요약을 그대로 라벨로 노출하니 해설집을 보는 느낌이었다. 카드 제목을
               e.name(사건 핵심을 요약하는 메타 라벨) 대신, 다른 배역이 흘린 정보라는
               디제틱한 출처로만 통일해 스포일러성 라벨을 감춘다. */}
-          <h3 className="mb-2 text-xs uppercase tracking-wide text-neutral-500">
-            다른 팀원의 증언
-          </h3>
+          <h2 className="mb-1 font-semibold text-neutral-200">다른 팀원의 증언</h2>
+          <p className="mb-3 text-xs text-neutral-500">
+            사건과 관련된 다른 팀원들의 증언입니다. 클릭하여 세부 내용을 볼 수 있습니다.
+          </p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {statements.map((e) => (
               <button

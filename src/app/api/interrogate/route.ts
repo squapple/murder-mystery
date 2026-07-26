@@ -17,6 +17,7 @@ import {
   INTERROGATION_LOCKED_TEXT,
   buildLockoutJudgeSystemPrompt,
   parseLockoutJudgeResponse,
+  PRESSURE_LABEL,
 } from "@/lib/prompts/actor-prompt";
 import { CHARACTERS, getActorPromptView } from "@/lib/game-data/characters";
 import { PERSONAS } from "@/lib/game-data/personas";
@@ -45,6 +46,9 @@ interface InterrogateRequestBody {
   round?: number;
   /** 조사 모드·행동 요청으로 실제 확보한 evidence id 목록 (player 공개 정보) */
   collectedEvidenceIds?: string[];
+  /** 이 캐릭터가 이전 턴에 이미 붕괴 하드게이트 "경고"(동요 표시)를 받았는지 —
+   * Phase 32: 진범이 경고 없이 한 번에 잠기는 문제를 고치기 위해 2단계로 나눴다. */
+  alreadyWarned?: boolean;
 }
 
 /**
@@ -104,6 +108,7 @@ export async function POST(req: NextRequest) {
     ? body.conversationHistory
     : [];
   const round = typeof body.round === "number" ? body.round : 1;
+  const alreadyWarned = body.alreadyWarned === true;
   const collectedIds = new Set(
     Array.isArray(body.collectedEvidenceIds) ? body.collectedEvidenceIds : []
   );
@@ -199,13 +204,30 @@ export async function POST(req: NextRequest) {
       // 무고자: 대사 생성과 분리된 전용 체크리스트 판정 콜(아래) 결과로 판단한다.
       // 두 경우 모두 동일한 고정 문구로 텍스트를 덮어써서, 어느 캐릭터가 먼저 잠기는지
       // 자체가 범인의 단서가 되지 않게 한다.
+      //
+      // Phase 32: 무고자 경로는 압박이 누적되며 자연히 "동요" 모드를 거친 뒤에야 잠기는
+      // 경우가 많은데, 진범의 하드게이트는 조건만 맞으면 대화 턴 수와 무관하게 즉시
+      // 잠겨서 "경고 없이 훅 잠기는 캐릭터 = 범인"이라는 메타 추리가 가능해진다는
+      // 지적(실전 리뷰)을 받았다. 그래서 하드게이트를 2단계로 나눴다: 조건이 처음
+      // 충족되면 곧바로 잠그지 않고 mode를 "동요"로 강제해 경고만 띄우고(⚠️ 배지가
+      // 뜨는 기존 로직을 그대로 재사용), 그 다음 턴에도 조건이 유지된 채 다시 압박하면
+      // 그때 잠근다. 경고 턴의 실제 대사(parsed.text)는 그대로 내보낸다 — 어차피
+      // "동요" 모드 자체가 자백이나 알리바이 부인을 금지하는 규칙 아래 생성됐으므로
+      // 경고 단계를 끼워 넣는다고 자백이 새어나올 위험은 없다.
       let locked = false;
+      let warned = false;
       if (character.alibiStatus === "breakable") {
-        locked = computeBreakableHardGate(
+        const gateMet = computeBreakableHardGate(
           actorPromptView.breakdownTriggerKeywords,
           collectedIds,
           userMessage
         );
+        if (gateMet && alreadyWarned) {
+          locked = true;
+        } else if (gateMet) {
+          warned = true;
+          parsed.mode = PRESSURE_LABEL;
+        }
       } else if (conversationHistory.length >= MIN_HISTORY_LENGTH_BEFORE_LOCKOUT_JUDGE) {
         try {
           const judgeCompletion = await client.chat.completions.create({
@@ -245,12 +267,16 @@ export async function POST(req: NextRequest) {
       // internalJudgment(진범 여부와 상관된 붕괴판정 상태)는 서버 로그에만 남기고
       // 클라이언트 응답에는 절대 포함하지 않는다.
       console.log(
-        `[interrogate] model=${NIM_MODEL} character=${characterId} persona=${persona.mbtiType} round=${round} elapsedMs=${elapsedMs} mode=${parsed.mode} internalJudgment=(${parsed.internalJudgment}) actionJudgment=(${parsed.actionJudgment}) locked=${locked}`
+        `[interrogate] model=${NIM_MODEL} character=${characterId} persona=${persona.mbtiType} round=${round} elapsedMs=${elapsedMs} mode=${parsed.mode} internalJudgment=(${parsed.internalJudgment}) actionJudgment=(${parsed.actionJudgment}) locked=${locked} warned=${warned}`
       );
 
       // 주의: 여기서 진범 여부와 상관된 어떤 신호도(예: "이 캐릭터만 붕괴조건 충족") 응답에
       // 절대 포함하지 않는다 — mode/locked 둘 다 무고자에게도 동일하게 발생할 수 있는
-      // 신호이므로 그 자체로는 진범임을 드러내지 않는다.
+      // 신호이므로 그 자체로는 진범임을 드러내지 않는다. warned 필드는 일부러 응답에
+      // 넣지 않았다 — breakable(진범) 캐릭터에서만 true가 나올 수 있는 값이라, 그대로
+      // 노출하면 네트워크 응답만 봐도 누가 진범인지 알 수 있는 새로운 누출 경로가
+      // 생긴다. 대신 클라이언트는 이미 대칭적으로 쓰이는 mode==="동요" 신호만으로
+      // "경고받음" 상태를 추적한다(GameApp.tsx의 ⚠️ 배지 로직과 동일한 신호 재사용).
       controller.enqueue(
         enc.encode(
           JSON.stringify({ type: "result", mode: parsed.mode, text: responseText, locked }) + "\n"

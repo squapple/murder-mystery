@@ -50,11 +50,10 @@ export interface ResultCharacterView {
 }
 
 export interface ScoreBreakdown {
-  basicEvidencePoints: number;
-  linkedEvidencePoints: number;
-  statementEvidencePoints: number;
+  evidenceCollectionPoints: number;
+  evidenceFoundCount: number;
+  evidenceTotalCount: number;
   motivePoints: number;
-  breakdownBonus: number;
   efficiencyBonus: number;
   total: number;
   maxTotal: number;
