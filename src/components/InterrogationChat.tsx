@@ -1,7 +1,26 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import type { ChatMessage } from "@/lib/game-client-types";
+
+const DOT_CYCLE_MS = 450;
+
+/** "생각하는 중" 표시에 점 1~3개가 순환하는 애니메이션 — 정지된 "..."이 멈춘 것처럼
+ * 보인다는 지적(응답이 오래 걸릴 때 특히)에 대응. 폭이 흔들리지 않도록 항상 점 3개를
+ * 그리고 opacity로만 켜고 끈다. */
+function useThinkingDots(active: boolean): number {
+  const [count, setCount] = useState(1);
+  useEffect(() => {
+    // loading이 false면 이 표시 자체가 렌더링되지 않으므로(부모에서 조건부 렌더)
+    // 여기서 굳이 1로 되돌릴 필요는 없다 — 다음 로딩 때 이어서 순환해도 무방하다.
+    if (!active) return;
+    const id = setInterval(() => {
+      setCount((c) => (c % 3) + 1);
+    }, DOT_CYCLE_MS);
+    return () => clearInterval(id);
+  }, [active]);
+  return count;
+}
 
 interface InterrogationChatProps {
   characterId: string;
@@ -30,6 +49,7 @@ export default function InterrogationChat({
   onSend,
 }: InterrogationChatProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const dotCount = useThinkingDots(loading);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -76,7 +96,14 @@ export default function InterrogationChat({
         {loading && (
           <div className="flex justify-start">
             <div className="rounded-lg bg-neutral-800 px-3 py-2 text-sm text-neutral-400">
-              {displayName}이(가) 생각하는 중...
+              {displayName}이(가) 생각하는 중
+              <span aria-hidden="true">
+                {[1, 2, 3].map((n) => (
+                  <span key={n} className={n <= dotCount ? "" : "opacity-0"}>
+                    .
+                  </span>
+                ))}
+              </span>
             </div>
           </div>
         )}

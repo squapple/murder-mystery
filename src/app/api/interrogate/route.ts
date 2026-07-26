@@ -22,7 +22,7 @@ import { CHARACTERS, getActorPromptView } from "@/lib/game-data/characters";
 import { PERSONAS } from "@/lib/game-data/personas";
 import { EVIDENCE } from "@/lib/game-data/evidence";
 import { resolvePersonaForCharacter } from "@/lib/casting";
-import type { CharacterId } from "@/lib/game-data/types";
+import type { CharacterId, Persona } from "@/lib/game-data/types";
 
 // Edge 런타임 되돌림 — Phase 18 참고. Edge는 25초 응답 마감이 있는데, 콜 수를
 // 줄여도(2→1) 여전히 매번 정확히 그 경계에서 FUNCTION_INVOCATION_TIMEOUT이 재현됐다
@@ -75,6 +75,22 @@ function computeBreakableHardGate(
  */
 const MIN_HISTORY_LENGTH_BEFORE_LOCKOUT_JUDGE = 6;
 
+/**
+ * 하트비트 스트리밍 — 모바일(특히 와이파이) 환경에서 응답이 몇십 초씩 조용히
+ * 걸리면, 그 사이 공유기/통신사 NAT 테이블이 "데이터가 안 오가는 연결"로 판단해
+ * 중간에서 끊어버리는 사례가 있었다(사용자 실사용 리포트 — PC는 유선이라 거의
+ * 안 겪지만 모바일 와이파이에서 이 요청만 2~3분씩 멈추는 현상). 클라이언트에
+ * 재시도 로직을 넣는 대신, 애초에 연결이 조용해지지 않도록 서버가 NIM 응답을
+ * 기다리는 동안 주기적으로 하트비트 바이트를 흘려보내는 방식을 택했다 —
+ * 응답이 원래 빠른 편(1초 안팎)이고 페이로드도 작아 이 방식의 비용이 크지 않다는
+ * 사용자 판단.
+ * NDJSON(줄바꿈 구분 JSON)으로 프레이밍한다: {"type":"heartbeat"} 줄을 하트비트
+ * 간격마다 흘려보내고, 마지막에 {"type":"result",...} 또는 {"type":"error",...}
+ * 한 줄로 마무리한다. 클라이언트(GameApp.tsx handleSend)는 heartbeat 타입은
+ * 무시하고 result/error만 반영한다.
+ */
+const HEARTBEAT_INTERVAL_MS = 5000;
+
 export async function POST(req: NextRequest) {
   let body: InterrogateRequestBody;
   try {
@@ -115,13 +131,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const persona = resolvePersonaForCharacter(castingToken, characterId, PERSONAS);
-  if (!persona) {
+  const resolvedPersona = resolvePersonaForCharacter(castingToken, characterId, PERSONAS);
+  if (!resolvedPersona) {
     return NextResponse.json(
       { error: "castingToken이 유효하지 않습니다. /api/casting을 먼저 호출하세요." },
       { status: 400 }
     );
   }
+  // 위에서 null을 걸러낸 뒤 새 바인딩에 담아둔다 — narrowing된 타입이 아래
+  // runInterrogation 클로저에도 그대로 유지되도록 하기 위함(TS는 클로저 안에서
+  // 바깥 const의 control-flow narrowing을 보존하지 않는다).
+  const persona: Persona = resolvedPersona;
 
   const actorPromptView = getActorPromptView(character);
   const reasoningExtraParams = getReasoningExtraParams(NIM_MODEL);
@@ -133,108 +153,142 @@ export async function POST(req: NextRequest) {
   );
   const startedAt = Date.now();
 
-  try {
-    const client = getNimClient();
+  async function runInterrogation(
+    controller: ReadableStreamDefaultController<Uint8Array>,
+    enc: TextEncoder
+  ) {
+    try {
+      const client = getNimClient();
 
-    // 전략가 계층 콜을 제거했다(Phase 17) — Vercel Edge 런타임의 25초 응답 시작
-    // 제한 때문에 순차 2콜 구조가 사실상 매번 FUNCTION_INVOCATION_TIMEOUT(504)으로
-    // 이어졌다. 전략가가 하던 판단은 이미 아래 buildActorSystemPrompt 내부의
-    // 붕괴조건 카운팅·화이트리스트·페르소나 성향 힌트와 중복이었어서, 별도 LLM 호출
-    // 없이 정적으로 통합했다(actor-prompt.ts buildPersonaTendencySection 참고).
-    const systemPrompt = buildActorSystemPrompt(
-      actorPromptView,
-      persona,
-      revealedEvidenceFacts,
-      collectedIds
-    );
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      { role: "system", content: systemPrompt },
-      ...historyMessages,
-      { role: "user", content: userMessage },
-    ];
-
-    const completion = await client.chat.completions.create({
-      model: NIM_MODEL,
-      max_tokens: 2048,
-      temperature: 1,
-      top_p: 0.95,
-      messages,
-      ...reasoningExtraParams,
-    } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming &
-      typeof reasoningExtraParams);
-
-    const rawText = completion.choices[0]?.message?.content ?? "";
-    const parsed = parseActorResponse(rawText);
-    parsed.mode = normalizeMode(parsed.mode);
-    const elapsedMs = Date.now() - startedAt;
-
-    // 심문종료(락아웃) 판정 — 더 이상 액터 응답의 [내부판정] 브라켓 하나에 기대지 않는다
-    // (실전 검증 결과 대화가 길어질수록 브라켓 자체가 누락되는 사례가 잦았다).
-    // 진범: collectedEvidenceIds+메시지 텍스트만으로 서버가 결정론적으로 계산하는
-    //       하드 게이트(computeBreakableHardGate) — LLM 판정 자체를 거치지 않는다.
-    // 무고자: 대사 생성과 분리된 전용 체크리스트 판정 콜(아래) 결과로 판단한다.
-    // 두 경우 모두 동일한 고정 문구로 텍스트를 덮어써서, 어느 캐릭터가 먼저 잠기는지
-    // 자체가 범인의 단서가 되지 않게 한다.
-    let locked = false;
-    if (character.alibiStatus === "breakable") {
-      locked = computeBreakableHardGate(
-        actorPromptView.breakdownTriggerKeywords,
-        collectedIds,
-        userMessage
+      // 전략가 계층 콜을 제거했다(Phase 17) — Vercel Edge 런타임의 25초 응답 시작
+      // 제한 때문에 순차 2콜 구조가 사실상 매번 FUNCTION_INVOCATION_TIMEOUT(504)으로
+      // 이어졌다. 전략가가 하던 판단은 이미 아래 buildActorSystemPrompt 내부의
+      // 붕괴조건 카운팅·화이트리스트·페르소나 성향 힌트와 중복이었어서, 별도 LLM 호출
+      // 없이 정적으로 통합했다(actor-prompt.ts buildPersonaTendencySection 참고).
+      const systemPrompt = buildActorSystemPrompt(
+        actorPromptView,
+        persona,
+        revealedEvidenceFacts,
+        collectedIds
       );
-    } else if (conversationHistory.length >= MIN_HISTORY_LENGTH_BEFORE_LOCKOUT_JUDGE) {
-      try {
-        const judgeCompletion = await client.chat.completions.create({
-          model: NIM_MODEL,
-          max_tokens: 512,
-          temperature: 0,
-          messages: [
-            { role: "system", content: buildLockoutJudgeSystemPrompt(actorPromptView) },
-            ...historyMessages,
-            { role: "user", content: userMessage },
-            { role: "assistant", content: parsed.text },
-          ],
-          ...reasoningExtraParams,
-        } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming & typeof reasoningExtraParams);
-        const judgeRaw = judgeCompletion.choices[0]?.message?.content ?? "";
-        const judgeResult = parseLockoutJudgeResponse(
-          judgeRaw,
-          actorPromptView.knownSecrets.length
+      const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+        { role: "system", content: systemPrompt },
+        ...historyMessages,
+        { role: "user", content: userMessage },
+      ];
+
+      const completion = await client.chat.completions.create({
+        model: NIM_MODEL,
+        max_tokens: 2048,
+        temperature: 1,
+        top_p: 0.95,
+        messages,
+        ...reasoningExtraParams,
+      } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming &
+        typeof reasoningExtraParams);
+
+      const rawText = completion.choices[0]?.message?.content ?? "";
+      const parsed = parseActorResponse(rawText);
+      parsed.mode = normalizeMode(parsed.mode);
+      const elapsedMs = Date.now() - startedAt;
+
+      // 심문종료(락아웃) 판정 — 더 이상 액터 응답의 [내부판정] 브라켓 하나에 기대지 않는다
+      // (실전 검증 결과 대화가 길어질수록 브라켓 자체가 누락되는 사례가 잦았다).
+      // 진범: collectedEvidenceIds+메시지 텍스트만으로 서버가 결정론적으로 계산하는
+      //       하드 게이트(computeBreakableHardGate) — LLM 판정 자체를 거치지 않는다.
+      // 무고자: 대사 생성과 분리된 전용 체크리스트 판정 콜(아래) 결과로 판단한다.
+      // 두 경우 모두 동일한 고정 문구로 텍스트를 덮어써서, 어느 캐릭터가 먼저 잠기는지
+      // 자체가 범인의 단서가 되지 않게 한다.
+      let locked = false;
+      if (character.alibiStatus === "breakable") {
+        locked = computeBreakableHardGate(
+          actorPromptView.breakdownTriggerKeywords,
+          collectedIds,
+          userMessage
         );
-        locked = judgeResult.allRevealed;
-        console.log(
-          `[interrogate] lockoutJudge character=${characterId} revealedCount=${judgeResult.revealedCount}/${judgeResult.totalSecrets} finalAnswer=(${judgeResult.finalAnswer}) locked=${locked}`
-        );
-      } catch (judgeErr) {
-        // 판정 콜 실패 시 잠그지 않는다 (과소잠금이 안전한 방향).
-        console.error("[interrogate] 락아웃 판정 콜 실패, 잠그지 않음:", judgeErr);
+      } else if (conversationHistory.length >= MIN_HISTORY_LENGTH_BEFORE_LOCKOUT_JUDGE) {
+        try {
+          const judgeCompletion = await client.chat.completions.create({
+            model: NIM_MODEL,
+            max_tokens: 512,
+            temperature: 0,
+            messages: [
+              { role: "system", content: buildLockoutJudgeSystemPrompt(actorPromptView) },
+              ...historyMessages,
+              { role: "user", content: userMessage },
+              { role: "assistant", content: parsed.text },
+            ],
+            ...reasoningExtraParams,
+          } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming & typeof reasoningExtraParams);
+          const judgeRaw = judgeCompletion.choices[0]?.message?.content ?? "";
+          const judgeResult = parseLockoutJudgeResponse(
+            judgeRaw,
+            actorPromptView.knownSecrets.length
+          );
+          locked = judgeResult.allRevealed;
+          console.log(
+            `[interrogate] lockoutJudge character=${characterId} revealedCount=${judgeResult.revealedCount}/${judgeResult.totalSecrets} finalAnswer=(${judgeResult.finalAnswer}) locked=${locked}`
+          );
+        } catch (judgeErr) {
+          // 판정 콜 실패 시 잠그지 않는다 (과소잠금이 안전한 방향).
+          console.error("[interrogate] 락아웃 판정 콜 실패, 잠그지 않음:", judgeErr);
+        }
       }
+      const responseText = locked ? INTERROGATION_LOCKED_TEXT : parsed.text;
+
+      // 소지품 요청(신발 등) 판정은 더 이상 여기서 하지 않는다 — 라운드 종료 시
+      // /api/round-review가 그 라운드 대화 전체를 한 번에 검토해 일괄 처리한다
+      // (actor-prompt.ts 이력 9번 참고: 매 턴 자기 판정 방식이 실전에서 신뢰도가
+      // 낮았고, 사전 등록 물증과 임의 물증을 같은 타이밍 규칙으로 통일하기로 함).
+
+      // 05_history_nan2026.md 프로토콜4(실패 에스컬레이션): 턴 단위 구조화 로그.
+      // internalJudgment(진범 여부와 상관된 붕괴판정 상태)는 서버 로그에만 남기고
+      // 클라이언트 응답에는 절대 포함하지 않는다.
+      console.log(
+        `[interrogate] model=${NIM_MODEL} character=${characterId} persona=${persona.mbtiType} round=${round} elapsedMs=${elapsedMs} mode=${parsed.mode} internalJudgment=(${parsed.internalJudgment}) actionJudgment=(${parsed.actionJudgment}) locked=${locked}`
+      );
+
+      // 주의: 여기서 진범 여부와 상관된 어떤 신호도(예: "이 캐릭터만 붕괴조건 충족") 응답에
+      // 절대 포함하지 않는다 — mode/locked 둘 다 무고자에게도 동일하게 발생할 수 있는
+      // 신호이므로 그 자체로는 진범임을 드러내지 않는다.
+      controller.enqueue(
+        enc.encode(
+          JSON.stringify({ type: "result", mode: parsed.mode, text: responseText, locked }) + "\n"
+        )
+      );
+    } catch (err) {
+      console.error("[interrogate] NVIDIA NIM 호출 실패:", err);
+      const message = err instanceof Error ? err.message : "알 수 없는 오류";
+      controller.enqueue(
+        enc.encode(JSON.stringify({ type: "error", error: `AI 호출 실패: ${message}` }) + "\n")
+      );
     }
-    const responseText = locked ? INTERROGATION_LOCKED_TEXT : parsed.text;
-
-    // 소지품 요청(신발 등) 판정은 더 이상 여기서 하지 않는다 — 라운드 종료 시
-    // /api/round-review가 그 라운드 대화 전체를 한 번에 검토해 일괄 처리한다
-    // (actor-prompt.ts 이력 9번 참고: 매 턴 자기 판정 방식이 실전에서 신뢰도가
-    // 낮았고, 사전 등록 물증과 임의 물증을 같은 타이밍 규칙으로 통일하기로 함).
-
-    // 05_history_nan2026.md 프로토콜4(실패 에스컬레이션): 턴 단위 구조화 로그.
-    // internalJudgment(진범 여부와 상관된 붕괴판정 상태)는 서버 로그에만 남기고
-    // 클라이언트 응답에는 절대 포함하지 않는다.
-    console.log(
-      `[interrogate] model=${NIM_MODEL} character=${characterId} persona=${persona.mbtiType} round=${round} elapsedMs=${elapsedMs} mode=${parsed.mode} internalJudgment=(${parsed.internalJudgment}) actionJudgment=(${parsed.actionJudgment}) locked=${locked}`
-    );
-
-    // 주의: 여기서 진범 여부와 상관된 어떤 신호도(예: "이 캐릭터만 붕괴조건 충족") 응답에
-    // 절대 포함하지 않는다 — mode/locked 둘 다 무고자에게도 동일하게 발생할 수 있는
-    // 신호이므로 그 자체로는 진범임을 드러내지 않는다.
-    return NextResponse.json({
-      mode: parsed.mode,
-      text: responseText,
-      locked,
-    });
-  } catch (err) {
-    console.error("[interrogate] NVIDIA NIM 호출 실패:", err);
-    const message = err instanceof Error ? err.message : "알 수 없는 오류";
-    return NextResponse.json({ error: `AI 호출 실패: ${message}` }, { status: 502 });
   }
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let closed = false;
+      const heartbeat = setInterval(() => {
+        if (closed) return;
+        controller.enqueue(encoder.encode(JSON.stringify({ type: "heartbeat" }) + "\n"));
+      }, HEARTBEAT_INTERVAL_MS);
+
+      try {
+        await runInterrogation(controller, encoder);
+      } finally {
+        closed = true;
+        clearInterval(heartbeat);
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
 }

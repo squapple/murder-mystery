@@ -28,6 +28,61 @@ const TOTAL_ROUNDS = 3;
 // 진범/무고자 모두 같은 라벨을 쓰므로 이 배지 자체는 범인을 암시하지 않는다.)
 const PRESSURE_MODE_LABEL = "동요";
 
+interface InterrogateStreamResult {
+  mode: string;
+  text: string;
+  locked: boolean;
+}
+
+/**
+ * /api/interrogate가 NDJSON(줄바꿈 구분 JSON)으로 스트리밍하는 응답을 읽는다
+ * (Phase 30 후속 — 모바일 와이파이에서 응답을 오래 기다리는 동안 공유기/통신사가
+ * "조용한 연결"로 판단해 끊어버리는 사례가 있어, 서버가 대기 중 주기적으로
+ * {"type":"heartbeat"} 줄을 흘려보내도록 바꿨다). heartbeat 줄은 무시하고,
+ * 마지막에 오는 {"type":"result",...} 한 줄만 실제 결과로 사용한다.
+ */
+async function readNdjsonResult(res: Response): Promise<InterrogateStreamResult> {
+  if (!res.body) throw new Error("응답 스트림을 읽을 수 없습니다.");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: InterrogateStreamResult | null = null;
+  let streamError: string | null = null;
+
+  const processLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    let parsed: { type: string; [key: string]: unknown };
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      return;
+    }
+    if (parsed.type === "result") {
+      result = parsed as unknown as InterrogateStreamResult;
+    } else if (parsed.type === "error") {
+      streamError = typeof parsed.error === "string" ? parsed.error : "알 수 없는 오류";
+    }
+    // "heartbeat" 타입은 연결 유지 목적일 뿐이라 그냥 무시한다.
+  };
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let newlineIdx: number;
+    while ((newlineIdx = buffer.indexOf("\n")) >= 0) {
+      processLine(buffer.slice(0, newlineIdx));
+      buffer = buffer.slice(newlineIdx + 1);
+    }
+  }
+  if (buffer.trim()) processLine(buffer);
+
+  if (streamError) throw new Error(streamError);
+  if (!result) throw new Error("서버로부터 응답을 받지 못했습니다.");
+  return result;
+}
+
 export default function GameApp() {
   const [introSeen, setIntroSeen] = useState(false);
 
@@ -227,8 +282,12 @@ export default function GameApp() {
           collectedEvidenceIds: Array.from(collectedEvidenceIds),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `요청 실패 (HTTP ${res.status})`);
+      if (!res.ok) {
+        // 요청 검증 실패(4xx) 등 스트리밍 시작 전 단계에서만 나오는 일반 JSON 에러 응답.
+        const data = await res.json().catch(() => ({}) as { error?: string });
+        throw new Error(data.error ?? `요청 실패 (HTTP ${res.status})`);
+      }
+      const data = await readNdjsonResult(res);
 
       setConversations((prev) => ({
         ...prev,
