@@ -51,9 +51,14 @@ export default function InterrogationChat({
   const scrollRef = useRef<HTMLDivElement>(null);
   const dotCount = useThinkingDots(loading);
 
+  // Phase 34 — 배열 참조가 아니라 실제로 의미 있는 값(메시지 "개수", 로딩 여부)에만
+  // 의존한다. 예전엔 `messages` 배열 자체를 의존성으로 뒀는데, 호출부에서 빈 배열을
+  // `?? []`로 매번 새로 만들어 넘기는 경우 참조가 매 렌더마다 바뀌어 이 effect가
+  // 불필요하게 재실행됐다 — 특히 1초마다 재렌더되는 타이머(GameApp.tsx nowTick)와
+  // 맞물려 "스크롤을 내려도 계속 위로 튕겨 올라오는" 버그로 이어졌다.
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages.length, loading]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {

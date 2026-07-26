@@ -28,6 +28,13 @@ const TOTAL_ROUNDS = 3;
 // 진범/무고자 모두 같은 라벨을 쓰므로 이 배지 자체는 범인을 암시하지 않는다.)
 const PRESSURE_MODE_LABEL = "동요";
 
+/** 아직 대화가 없는 캐릭터에 매번 새 배열을 만들어 넘기면(예: `?? []`) 참조가 매
+ * 렌더마다 바뀌어, 그 배열을 effect 의존성으로 쓰는 자식 컴포넌트(InterrogationChat의
+ * 자동 스크롤)가 불필요하게 재실행된다 — Phase 32에서 추가한 1초 타이머(nowTick)가
+ * 매초 GameApp을 재렌더시키면서 이 문제가 실제로 "스크롤을 내려도 계속 위로
+ * 튕겨 올라오는" 버그로 나타났다. 항상 같은 참조를 재사용해 이 재실행 자체를 없앤다. */
+const EMPTY_MESSAGES: ChatMessage[] = [];
+
 /** MM:SS 형식으로 경과 시간 표시 — 헤더의 실시간 타이머용(Phase 32). */
 function formatElapsedTime(elapsedMs: number): string {
   const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
@@ -657,7 +664,7 @@ export default function GameApp() {
               characterId={activeCharacter.characterId}
               displayName={activeCharacter.displayName}
               roleTitle={activeCharacter.roleTitle}
-              messages={conversations[activeCharacter.characterId] ?? []}
+              messages={conversations[activeCharacter.characterId] ?? EMPTY_MESSAGES}
               loading={Boolean(loadingMap[activeCharacter.characterId])}
               error={errorMap[activeCharacter.characterId] ?? null}
               input={inputs[activeCharacter.characterId] ?? ""}
