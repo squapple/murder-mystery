@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { CharacterId } from "@/lib/game-data/types";
-import { getAvailableEvidenceForRound, getEvidenceById } from "@/lib/game-data/evidence";
+import { getEvidenceById } from "@/lib/game-data/evidence";
 import type {
   AdHocEvidenceCard,
   ChatMessage,
@@ -27,6 +27,17 @@ const TOTAL_ROUNDS = 3;
 // (Phase 30 — 사용자 피드백: 인내심 시스템이 있다는 걸 플레이어가 알 방법이 없었다.
 // 진범/무고자 모두 같은 라벨을 쓰므로 이 배지 자체는 범인을 암시하지 않는다.)
 const PRESSURE_MODE_LABEL = "동요";
+const PRESSURE_LEVEL_MAX = 5;
+
+/** 게이지 필 색상 — 단계가 오를수록 노랑→주황→빨강으로 escalate. */
+function pressureSegmentColor(level: number, index: number, locked: boolean): string {
+  if (index >= level) return "bg-neutral-700";
+  if (locked) return "bg-rose-600";
+  if (level >= 4) return "bg-rose-500";
+  if (level >= 3) return "bg-orange-500";
+  if (level >= 2) return "bg-amber-400";
+  return "bg-yellow-300";
+}
 
 /** 아직 대화가 없는 캐릭터에 매번 새 배열을 만들어 넘기면(예: `?? []`) 참조가 매
  * 렌더마다 바뀌어, 그 배열을 effect 의존성으로 쓰는 자식 컴포넌트(InterrogationChat의
@@ -274,19 +285,11 @@ export default function GameApp() {
     if (phase === "result") clearGame();
   }, [phase]);
 
-  // 라운드가 바뀔 때마다 진술 증거(클릭 불필요)는 자동으로 확보 처리
-  useEffect(() => {
-    if (phase !== "round") return;
-    const autoIds = getAvailableEvidenceForRound(round)
-      .filter((e) => e.category === "statement")
-      .map((e) => e.id);
-    if (autoIds.length === 0) return;
-    setCollectedEvidenceIds((prev) => {
-      const next = new Set(prev);
-      autoIds.forEach((id) => next.add(id));
-      return next;
-    });
-  }, [phase, round]);
+  // Phase 35 — 진술 증거(다른 팀원의 증언)를 라운드 전환 시 자동 확보하던 로직을
+  // 없앴다. 실전 리뷰: "지금은 클릭하는 게 의미가 없다"(이미 자동으로 확보돼 있어서)
+  // — 이제 물증과 똑같이 InvestigationBoard에서 직접 클릭해야 확보된다
+  // (getAvailableEvidenceForRound가 라운드별로 "보이는" 시점만 결정하고, "확보됨"
+  // 여부는 물증과 동일하게 onCollect 클릭으로만 결정된다).
 
   // Phase 32 — 채점 기준을 시작 전에 미리 공개하기로 하면서, 소요 시간도 결과 화면에서만
   // 알게 되는 대신 진행 중 헤더에 실시간으로 보여주기로 했다(사용자 요청). 1초마다
@@ -582,20 +585,31 @@ export default function GameApp() {
   const activeCharacter = characters.find((c) => c.characterId === activeCharacterId);
   const activeLocked = activeCharacter ? lockedCharacters.has(activeCharacter.characterId) : false;
 
-  /** 해당 캐릭터가 잠기지 않은 상태에서 가장 최근 응답이 "동요" 모드였는지 — 인내심 경고 배지용. */
-  function isNearPatienceLimit(characterId: string): boolean {
-    if (lockedCharacters.has(characterId)) return false;
+  /**
+   * 인내심 게이지(0~5) — Phase 35: 실전 리뷰에서 "⚠️ 배지 하나로는 지금 얼마나
+   * 몰아붙여도 되는지 감이 안 온다"는 지적을 받아, 대화 전체를 훑어 오르내리는
+   * 연속값으로 바꿨다. "동요" 응답이 나오면 +1, 순순히 "답변"하면 -1, "거짓말유지"
+   * 등 그 외는 유지 — 몰아붙이면 쌓이고, 잠깐 물러서면 가라앉는 식이다.
+   * 실제 잠금 여부는 여전히 서버가 결정론적으로 판단한다(진범 하드게이트/무고자
+   * 판정 콜, interrogate/route.ts) — 이 게이지는 그 판단을 미리 정확히 알려주는
+   * 것이 아니라 "지금 분위기가 얼마나 팽팽한지"를 근사해서 보여주는 화면 표시용
+   * 지표다. 실제로 잠기면(lockedCharacters) 그때 게이지도 가득 찬 것으로 표시된다.
+   */
+  function computePressureLevel(characterId: string): number {
+    if (lockedCharacters.has(characterId)) return PRESSURE_LEVEL_MAX;
     const history = conversations[characterId];
-    if (!history || history.length === 0) return false;
-    for (let i = history.length - 1; i >= 0; i -= 1) {
-      const msg = history[i];
-      if (msg.role === "assistant") return msg.mode === PRESSURE_MODE_LABEL;
+    if (!history || history.length === 0) return 0;
+    let level = 0;
+    for (const msg of history) {
+      if (msg.role !== "assistant") continue;
+      if (msg.mode === PRESSURE_MODE_LABEL) level = Math.min(PRESSURE_LEVEL_MAX - 1, level + 1);
+      else if (msg.mode === "답변") level = Math.max(0, level - 1);
     }
-    return false;
+    return level;
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-6">
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-6 xl:max-w-7xl">
       <header className="flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-widest text-neutral-500">
@@ -623,7 +637,9 @@ export default function GameApp() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
+      {/* Phase 35 — 넓은 화면(xl)에서는 왼쪽 열을 넓혀 조사 모드/다른 팀원의 증언이
+          나란히 들어갈 공간을 준다(사용자 요청: "화면 넓을 때는 옆에, 창모드일 땐 지금처럼"). */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr] xl:grid-cols-[640px_1fr]">
         <div className="flex flex-col gap-4">
           <InvestigationBoard
             round={round}
@@ -637,23 +653,35 @@ export default function GameApp() {
         <div className="flex flex-col gap-3">
           <div className="flex gap-2">
             {characters.map((c) => {
-              const nearLimit = isNearPatienceLimit(c.characterId);
+              const level = computePressureLevel(c.characterId);
+              const isLocked = lockedCharacters.has(c.characterId);
               return (
                 <button
                   key={c.characterId}
                   onClick={() => setActiveCharacterId(c.characterId)}
-                  title={nearLimit ? "지금 많이 동요하고 있습니다 — 인내심이 얼마 남지 않았을 수 있습니다" : undefined}
+                  title={
+                    isLocked
+                      ? "더 이상 심문에 응하지 않습니다"
+                      : `인내심 ${level}/${PRESSURE_LEVEL_MAX} — 몰아붙일수록 차오르고, 순순히 답하면 가라앉습니다`
+                  }
                   className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
                     activeCharacterId === c.characterId
                       ? "border-blue-600 bg-blue-950/40 text-blue-200"
-                      : nearLimit
-                        ? "border-amber-700 bg-amber-950/20 text-amber-200 hover:border-amber-500"
-                        : "border-neutral-800 bg-neutral-900/40 text-neutral-300 hover:border-neutral-600"
-                  } ${lockedCharacters.has(c.characterId) ? "opacity-60" : ""}`}
+                      : "border-neutral-800 bg-neutral-900/40 text-neutral-300 hover:border-neutral-600"
+                  } ${isLocked ? "opacity-60" : ""}`}
                 >
-                  {c.displayName}
-                  {lockedCharacters.has(c.characterId) && " 🔒"}
-                  {!lockedCharacters.has(c.characterId) && nearLimit && " ⚠️"}
+                  <div className="flex items-center justify-center gap-1">
+                    <span>{c.displayName}</span>
+                    {isLocked && <span>🔒</span>}
+                  </div>
+                  <div className="mt-1.5 flex justify-center gap-0.5" aria-hidden="true">
+                    {Array.from({ length: PRESSURE_LEVEL_MAX }, (_, i) => (
+                      <span
+                        key={i}
+                        className={`h-1.5 w-3 rounded-sm transition-colors ${pressureSegmentColor(level, i, isLocked)}`}
+                      />
+                    ))}
+                  </div>
                 </button>
               );
             })}

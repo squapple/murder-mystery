@@ -8,10 +8,11 @@ import type OpenAI from "openai";
 import {
   getNimClient,
   NIM_MODEL,
-  POLISH_MODEL,
   getReasoningExtraParams,
 } from "@/lib/nim-client";
-import { polishText } from "@/lib/text-polish";
+// Phase 33에서 쓰던 polishText/POLISH_MODEL 연동은 Phase 35에서 되돌렸다 —
+// 자세한 이유는 아래 responseText 계산부 주석 참고. import만 빼고
+// text-polish.ts/POLISH_MODEL 자체는 나중을 위해 남겨뒀다.
 import {
   buildActorSystemPrompt,
   parseActorResponse,
@@ -114,8 +115,11 @@ export async function POST(req: NextRequest) {
   const collectedIds = new Set(
     Array.isArray(body.collectedEvidenceIds) ? body.collectedEvidenceIds : []
   );
+  // Phase 35: 카드 면 문구(revealedFact)가 짧은 headline으로 바뀌면서, 액터 프롬프트에
+  // 넘기는 "형사가 실제로 확보한 증거" 컨텍스트는 detail(있으면 더 풍부한 서술)을
+  // 우선 사용한다 — 카드 면이 짧아졌다고 모델이 받는 정보까지 부실해지면 안 된다.
   const revealedEvidenceFacts = EVIDENCE.filter((e) => collectedIds.has(e.id)).map(
-    (e) => e.revealedFact
+    (e) => e.detail ?? e.revealedFact
   );
 
   if (
@@ -258,12 +262,14 @@ export async function POST(req: NextRequest) {
           console.error("[interrogate] 락아웃 판정 콜 실패, 잠그지 않음:", judgeErr);
         }
       }
-      // Phase 33 — 오타/중복 음절 후처리. 고정 잠금 문구는 이미 깨끗하므로 건너뛰고,
-      // 실제로 화면에 보여줄 대사(경고 턴 포함)만 교정 콜을 한 번 더 거친다. 실패해도
-      // polishText가 원문을 그대로 반환하므로 이 단계 때문에 응답 전체가 실패하지 않는다.
-      const responseText = locked
-        ? INTERROGATION_LOCKED_TEXT
-        : await polishText(client, POLISH_MODEL, parsed.text, getReasoningExtraParams(POLISH_MODEL));
+      // Phase 33에서 오타/중복 음절 후처리(polishText) 콜을 붙였었으나, Phase 35에서
+      // 되돌렸다 — 한 턴만 떼어서 교정하는 방식으로는 "정민아가 형사를 '형님'이라
+      // 부르는" 것 같은 맥락(호칭·존비속 관계) 오류까지는 못 잡고, 오히려 손을 대다가
+      // 새로 만들어내는 사례도 있었다(사용자 관찰). 전체 대화 맥락을 함께 보는 교정
+      // 방식은 지연시간이 크게 늘어날 것으로 예상돼 비용 대비 효율이 애매하다고 판단,
+      // 대신 더 나은 모델로 교체하는 방향을 나중에 다시 검토하기로 하고 일단 되돌린다.
+      // text-polish.ts와 POLISH_MODEL(nim-client.ts)은 그 재검토를 위해 그대로 남겨뒀다.
+      const responseText = locked ? INTERROGATION_LOCKED_TEXT : parsed.text;
 
       // 소지품 요청(신발 등) 판정은 더 이상 여기서 하지 않는다 — 라운드 종료 시
       // /api/round-review가 그 라운드 대화 전체를 한 번에 검토해 일괄 처리한다

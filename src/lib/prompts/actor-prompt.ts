@@ -210,7 +210,11 @@ function buildStatementGateSection(
     if (!evidence) continue;
     const gateOpen = ref.requiredEvidenceIds.some((id) => collectedEvidenceIds.has(id));
     if (gateOpen) {
-      open.push(`- ${evidence.name}: ${evidence.revealedFact}`);
+      // Phase 35: 카드 면(revealedFact)이 짧은 headline으로 바뀌면서, 프롬프트에
+      // 넘기는 "실제로 확보된 증거" 컨텍스트는 detail(있으면)을 우선 써서 여전히
+      // 충분한 정보를 모델에 전달한다 — 그래야 "형사가 이 증거를 근거로 캐물었는지"
+      // 판단이 흐려지지 않는다.
+      open.push(`- ${evidence.name}: ${evidence.detail ?? evidence.revealedFact}`);
     } else {
       closed.push(`- ${evidence.name}`);
     }

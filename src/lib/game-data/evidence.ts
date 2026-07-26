@@ -2,6 +2,13 @@
 // (18번 문서 배치2: 박서연 휴대폰 사진첩 추가로 9→10종).
 // 조사 모드 UI(proc-investigation, AI 불필요)의 데이터 소스.
 // 여기 없는 단서를 임의로 추가하지 않는다 (10번 문서 "하지 말 것").
+//
+// Phase 35 — 실전 리뷰 피드백: 카드마다 "클릭 전 카드 면에 보이는 정보량"이
+// 들쭉날쭉했다("사망추정시각"처럼 짧은 headline + 클릭 시 상세가 이상적인 카드가
+// 있는가 하면, "법인카드 내역"처럼 결론까지 카드 면에 그대로 노출된 카드도 있었다).
+// 전체 카드를 "카드 면 = 짧은 headline, 클릭 = 서사가 살아있는 상세"로 통일했다.
+// 진술 증거(다른 팀원의 증언)도 같은 원칙으로 손봤다 — 카드 제목 자체를 정보원을
+// 가리키는 익명 라벨("팀원 A의 증언" 류)로 바꾸고, 실제 내용은 상세보기로 옮겼다.
 
 export type EvidenceCategory = "physical" | "statement";
 
@@ -29,8 +36,9 @@ export interface EvidenceItem {
    */
   breakdownCategory?: "A" | "B" | "C";
   /**
-   * 조사 모드에서 카드를 클릭했을 때 확대 표시되는 상세 설명 (플레이어 실전 피드백 반영).
-   * 생략 시 revealedFact를 그대로 확대 표시에 사용한다 — 모든 항목에 강제할 필요는 없다.
+   * 조사 모드에서 카드를 클릭했을 때 확대 표시되는 상세 설명. Phase 35부터는 사실상
+   * 모든 항목에 채워져 있다 — revealedFact(카드 면)는 짧은 headline, detail은 실제
+   * 서사가 담긴 상세로 역할을 분리했다.
    */
   detail?: string;
 }
@@ -53,8 +61,7 @@ export const EVIDENCE: EvidenceItem[] = [
     // Phase 30: 살해도구(돌) 서브플롯 추가하며 "흉기 없음, 그냥 넘어져서 다침"이던
     // 기존 소견을 "둔기로 추정되는 물체에 가격당함"으로 수정 — 몸싸움 중 우발적으로
     // 근처 물건을 집어든 것이지 미리 흉기를 준비한 게 아니므로, "계획적 살인이 아니다"
-    // 라는 이야기의 큰 틀은 그대로 유지된다. 프롤로그/사건 개요의 "몸싸움 끝에 입은
-    // 외상"이라는 표현은 이 변경과 여전히 정확히 들어맞아 손대지 않았다.
+    // 라는 이야기의 큰 틀은 그대로 유지된다.
     detail:
       "부검 소견: 목과 어깨 부위에 다발성 타박상, 뒤통수에 둔기에 의한 것으로 보이는 열상 확인. 자상은 발견되지 않았다 — 몸싸움 중 단순히 넘어져 생긴 손상이라기엔 상처 형태가 지나치게 일정해, 돌이나 각진 물체 같은 둔기로 가격당했을 가능성이 유력하다. 직접 사인은 두부 외상. 위 내용물 소화 정도를 근거로 사망 추정 시각은 23:45경으로 특정됐다. 흉기 자체는 현장에서 발견되지 않았다.",
     revealTiming: "round1_base",
@@ -72,12 +79,11 @@ export const EVIDENCE: EvidenceItem[] = [
   {
     // 실전 피드백(사용자 제안): 캐스팅 화면의 동기 태그를 줄이는 대신, "이번 워크숍이
     // 곧 승진 심사에 반영되는 인사평가 마지막 자리였다"는 팀 전체에 걸리는 배경
-    // 사실을 조사 모드 물증으로 옮겼다 — 각 배역의 동기를 직접 알려주지 않아도,
-    // 플레이어가 이 정황과 각자의 태도를 스스로 연결해 추리하게 만드는 용도.
+    // 사실을 조사 모드 물증으로 옮겼다.
     id: "ev-workshop-purpose",
     category: "physical",
     name: "워크숍 취지 안내문",
-    revealedFact: "이번 워크숍은 이번 분기 인사평가를 마무리하는 자리 — 평가 결과가 곧 승진 심사에 반영될 예정",
+    revealedFact: "이번 워크숍이 인사평가 마무리 자리라는 안내문 발견",
     detail:
       "인사팀이 사전에 배포한 워크숍 안내문. 이번 1박 2일 워크숍이 이번 분기 인사평가의 마지막 관찰 기간이며, 여기서의 태도와 성과가 다가오는 승진 심사에 직접 반영된다고 명시돼 있다 — 마케팅팀 전체가 은근히 신경을 곤두세우고 있었을 만한 자리였다는 뜻이다.",
     revealTiming: "round1_base",
@@ -88,38 +94,47 @@ export const EVIDENCE: EvidenceItem[] = [
     name: "법인카드 내역",
     // 실전 피드백: "정민아 관련 비리 정황"이라는 문구가 정민아 본인이 비리를 저지른
     // 것처럼 읽혀 오해를 샀다. 실제로는 피해자(김영훈) 본인의 오남용이고 정민아는
-    // 그걸 우연히 목격한 입장(characters.ts 정민아 knownSecrets 참고) — 당사자를
-    // 명확히 밝히도록 문구를 고쳤다.
-    revealedFact: "법인카드 오남용 정황 — 사용 당사자는 피해자(김영훈) 본인, 정민아는 이를 우연히 목격한 것으로 보임 (이현우와 직접 관련 없음)",
+    // 그걸 우연히 목격한 입장(characters.ts 정민아 knownSecrets 참고) — 그 당사자
+    // 클리어는 이제 카드 면이 아니라 상세보기에서 밝힌다.
+    revealedFact: "법인카드 오남용 정황 포착",
+    detail:
+      "법인카드 사용 내역에서 오남용 정황이 발견됐다. 사용 당사자는 피해자 김영훈 본인이며, 정민아는 이를 우연히 목격한 것으로 보인다 — 이현우와는 직접적인 관련이 없다.",
     revealTiming: "round1_end",
   },
   {
     id: "ev-convenience-store-receipt",
     category: "physical",
     name: "편의점 영수증",
-    revealedFact: "박서연 23:00~00:15 외출 확인 (박서연 알리바이용)",
+    revealedFact: "박서연 외출 기록 확인",
+    detail:
+      "박서연이 23:00부터 00:15까지 편의점을 다녀왔다는 영수증이 확인됐다 — 박서연의 알리바이를 뒷받침하는 물증이다.",
     revealTiming: "round1_end",
   },
   {
     id: "ev-deleted-call-recovery",
     category: "physical",
     name: "통화/삭제문자 복구",
-    revealedFact: "22:00 피해자-본사 인사평가 통화 정황",
+    revealedFact: "피해자의 삭제된 통화 기록 복구",
+    detail:
+      "피해자 김영훈의 휴대폰에서 22:00경 본사와 나눈 통화 기록이 복구됐다 — 인사평가와 관련된 통화였던 것으로 보인다.",
     revealTiming: "round1_end",
   },
   {
     id: "ev-performance-review",
     category: "physical",
     name: "인사평가서",
-    revealedFact: "이현우 본인이 평가 대상, 위협감 느낄 만한 내용",
+    revealedFact: "이현우 차장",
+    detail:
+      "이현우 차장 — 성과는 있으나 팀장(김영훈) 평가에서 최저 평가를 받아 승진 대상에서 제외됨.",
     revealTiming: "round2_end",
   },
   {
     id: "ev-yearbook-sns",
     category: "physical",
     name: "회사 행사 사진(SNS)",
-    revealedFact:
-      "예전 회사 행사 사진(SNS 태그)에서 박서연-이현우가 같은 자리에 있었음이 발견됨 (인턴-사수 시절)",
+    revealedFact: "예전 회사 행사 사진 발견",
+    detail:
+      "예전 회사 행사 사진(SNS 태그)에서 박서연과 이현우가 같은 자리에 있었던 것이 발견됐다 — 인턴-사수로 함께 일했던 시절이다.",
     revealTiming: "round2_end",
   },
   {
@@ -131,7 +146,8 @@ export const EVIDENCE: EvidenceItem[] = [
     // 정황 증거이되 단정을 피해 여지를 남겼다 — 캐릭터 연기 지침(characters.ts
     // requestableItems.narrativeResult)에는 "완전히 일치, 결정적 물증"이라는 내부
     // 진실이 그대로 남아있으므로 붕괴 조건 판정 등 게임 로직에는 영향 없다.
-    revealedFact: "이현우 신발 흙 성분이 산책로 흙과 매우 유사하다 — 같은 계열의 흙으로 보인다",
+    revealedFact: "이현우 신발에서 흙 성분 검출",
+    detail: "이현우 신발 흙 성분이 산책로 흙과 매우 유사하다 — 같은 계열의 흙으로 보인다.",
     // 조사 보드 클릭이 아니라 심문 중 "신발을 보여달라"는 행동 요청으로만 해금된다
     // (10_claude_code_handoff.md 후속 피드백 — 실제 요청 행위 없이 라운드만 지나면
     // 자동 공개되던 걸 없애 몰입감을 높였다).
@@ -143,21 +159,25 @@ export const EVIDENCE: EvidenceItem[] = [
     id: "ev-shoe-park",
     category: "physical",
     name: "박서연 신발 확인",
-    revealedFact: "최근에 새로 산 신발이라 흙 반응 없음 — 사건과 무관",
+    revealedFact: "박서연 신발 확인 — 흙 반응 없음",
+    detail: "최근에 새로 산 신발이라 흙이 묻어있지 않다 — 사건과 무관한 것으로 보인다.",
     revealTiming: "action_triggered",
   },
   {
     id: "ev-shoe-jeong",
     category: "physical",
     name: "정민아 신발 확인",
-    revealedFact: "신발에서 최근 세척한 흔적 발견 — 흙은 안 나왔지만 석연치 않음",
+    revealedFact: "정민아 신발 확인 — 세척 흔적 발견",
+    detail:
+      "신발에서 최근 세척한 흔적이 발견됐다. 흙 성분은 나오지 않았지만, 왜 하필 지금 세척했는지는 석연치 않다.",
     revealTiming: "action_triggered",
   },
   {
     id: "ev-park-phone-photos",
     category: "physical",
     name: "박서연 휴대폰 사진첩",
-    revealedFact: "정민아와 김영훈이 손을 잡거나 다정한 모습을 몰래 찍어둔 사진 1장",
+    revealedFact: "박서연 휴대폰에서 수상한 사진 발견",
+    detail: "정민아와 김영훈이 손을 잡거나 다정한 모습을 몰래 찍어둔 사진이 한 장 발견됐다.",
     revealTiming: "round3_open",
   },
   {
@@ -167,39 +187,48 @@ export const EVIDENCE: EvidenceItem[] = [
     // 위치 관계를 심문 대화만으로 캐내야 한다(사용자 지침: 조사 보드 물증 카드로 만들지
     // 않고 심문 전용 단서로 남긴다 — 답을 그냥 공개하는 꼴이 되지 않도록). 그래서 이
     // 항목엔 breakdownCategory를 붙이지 않았다(단독으로 결정타가 되면 안 되므로).
-    // Phase 32: detail 마지막에 "이 물증만으로는 알 수 없다"는 문장이 있었는데, 실전
-    // 리뷰에서 "이렇게까지 써주면 플레이어가 트릭이 있다는 걸 대놓고 안내받는 꼴"이라는
-    // 지적을 받아 삭제했다 — 그 판단은 박서연이 "몰랐다"고 계속 진술하는 걸 듣고
-    // 플레이어가 스스로 떠올려야 하는 몫으로 남긴다.
     id: "ev-murder-weapon",
     category: "physical",
     name: "살해도구(돌)",
-    revealedFact:
-      "박서연 방 베란다에서 핏자국이 묻은 돌 발견 — 혈흔 감식 결과 피해자 김영훈의 혈액과 일치 확인",
+    revealedFact: "박서연 방 베란다에서 살해도구로 추정되는 돌 발견",
     detail:
       "박서연 숙소(202호) 베란다 화분 뒤에서 주먹만 한 돌 하나가 발견됐다. 표면에 남은 혈흔을 감식한 결과 피해자 김영훈의 혈액형 및 DNA와 일치했다 — 산책로에 흔한 종류의 돌로, 원래 그 자리에 있던 것이 아니라 누군가 옮겨다 놓은 것으로 보인다.",
     revealTiming: "round3_open",
   },
   {
+    // Phase 35: 카드 제목을 "박서연 다툼 이유"처럼 결론을 미리 알려주는 라벨 대신,
+    // 정보원을 가리키는 익명 라벨로 바꿨다 — 카드 면(revealedFact)만 봐서는 누구 얘기인지
+    // 알 수 없고, 클릭해야 실제 내용이 드러난다. name과 revealedFact를 동일한 문구로
+    // 중복 노출하지 않도록 revealedFact는 짧은 화제 힌트로 따로 뒀다.
     id: "stmt-park-dispute-reason",
     category: "statement",
-    name: "박서연 다툼 이유",
-    revealedFact: "박서연-김영훈 성과 갈등",
+    name: "팀원 A의 증언",
+    revealedFact: "성과 문제에 대한 이야기",
+    detail: "박서연과 김영훈 팀장 사이에 성과를 둘러싼 갈등이 있었다는 이야기가 있다.",
     revealTiming: "round1_end",
   },
   {
+    // Phase 35: 사용자가 제시한 예시 문구를 그대로 쓰면 characters.ts에 이미 정의된
+    // 박서연-이현우 갈등의 원인(성과 가로채기 — 박서연이 자기 성과를 이현우에게
+    // 빼앗겼다고 믿는 쪽)과 충돌해서, 그 원형(성과 가로채기)과 모순되지 않도록
+    // "정민아가 알고 있는 이현우의 과거 실수"는 구체적인 내용을 확정하지 않고
+    // 여지를 남기는 쪽으로 조정했다 — characters.ts 정민아 knownSecrets에도 이
+    // 실수의 구체적 내용은 정의돼 있지 않다("이현우의 과거 실수(약점)를 알고 있음").
     id: "stmt-lee-past-mistake",
     category: "statement",
-    name: "정민아-이현우 트러블",
-    revealedFact: "정민아가 이현우 과거 실수를 알고 있음",
+    name: "팀원 B의 증언",
+    revealedFact: "이현우의 과거에 대한 이야기",
+    detail:
+      "정민아는 이현우에게 예전 직장에서 있었던 실수, 그러니까 약점이 될 만한 일이 있다는 걸 알고 있다고 말했다 — 다만 정확히 무슨 일이었는지는 끝내 밝히지 않았다.",
     revealTiming: "round2_end",
     breakdownCategory: "C",
   },
   {
     id: "stmt-lee-park-grudge",
     category: "statement",
-    name: "박서연-이현우 악연 사건",
-    revealedFact:
+    name: "팀원 C의 증언",
+    revealedFact: "인턴 시절 있었던 일",
+    detail:
       "예전 회사에서 박서연이 이현우의 인턴이었던 시절이 있었고, 그때 있었던 성과 문제로 박서연이 이현우에게 안 좋은 감정을 품고 있다는 이야기가 있다.",
     revealTiming: "round2_end",
     breakdownCategory: "C",
@@ -207,16 +236,19 @@ export const EVIDENCE: EvidenceItem[] = [
   {
     id: "stmt-motive-disclosure",
     category: "statement",
-    name: "각자의 동기 자진공개/은폐",
-    revealedFact: "인사평가나 성과 문제로 다들 나름의 압박감을 느끼고 있었다는 정황이 있다.",
+    name: "인사팀원 A의 증언",
+    revealedFact: "인사평가에 대한 이야기",
+    detail:
+      "최근 박서연, 이현우, 정민아가 인사평가에 대해 큰 압박감을 느끼고 있었다고 한다. 인사평가에는 김영훈 팀장의 최종평가가 제일 중요하다.",
     revealTiming: "round3_open",
     breakdownCategory: "C",
   },
   {
     id: "stmt-lee-office-visit",
     category: "statement",
-    name: "이현우 관리실 방문 이유",
-    revealedFact: "그날 밤 이현우가 관리실에 들러 무언가를 물어보고 갔다는 증언이 나왔다.",
+    name: "관리실 직원의 증언",
+    revealedFact: "그날 밤 방문자에 대한 이야기",
+    detail: "그날 밤 이현우가 관리실에 들러 무언가를 물어보고 갔다는 증언이 나왔다.",
     revealTiming: "round3_open",
     isBreakdownTrigger: true,
   },
