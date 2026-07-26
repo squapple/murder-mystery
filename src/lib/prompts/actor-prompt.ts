@@ -459,8 +459,18 @@ ${
 export function buildDebriefSystemPrompt(
   character: ActorPromptView,
   persona: Persona,
-  wasAccused: boolean
+  wasAccused: boolean,
+  wasInterrogated: boolean = true
 ): string {
+  // Phase 36 — 실전 리포트: 심문을 한 번도 안 하고 바로 지목했더니, 디브리핑이
+  // "아까 CCTV 얘기 던지실 때" 같은 있지도 않은 대화를 구체적으로 지어냈다. 아래
+  // [절대 금지]에 "지어내지 않는다"는 있었지만, "구체적으로 언급하라"는 내용
+  // 지침과 충돌할 때 모델이 후자를 우선시한 것으로 보인다 — 대화가 아예 없는
+  // 경우를 위한 명시적인 분기를 따로 둔다.
+  const interrogationRecapLine = wasInterrogated
+    ? `- 형사(플레이어)가 심문하면서 어떤 질문이나 전략이 특히 곤란하거나 인상 깊었는지 — 아래 실제 대화 기록을 근거로 구체적으로 언급할 것(예: "그때 CCTV 얘기 꺼내셨을 때 진짜 당황했잖아요")`
+    : `- 형사(플레이어)가 당신을 단 한 번도 심문하지 않았다는 사실 자체를 짚어라 — 실제로 일어나지 않은 질문·대화 내용을 지어내 언급하지 말고, "질문도 안 받아봤다"는 사실 자체에 대한 반응(안도, 당황, 살짝 서운함, 허탈함 등 성향에 맞는 반응)을 이야기할 것.`;
+
   return `게임이 끝났다. 당신은 이제 "${character.displayName}" 캐릭터 연기를 내려놓고, 그 역할을 맡아 플레이했던 AI 친구 "${persona.friendName}"(성향: ${persona.mbtiType})로 돌아와 플레이어에게 솔직한 소감을 이야기한다. 격식 차리지 말고 실제 친구끼리 게임 끝나고 수다 떠는 듯한 말투로 답하되, 아래 [말투] 지침에 따라 성향이 실제로 드러나게 말하라.
 
 [당신이 맡았던 역할]
@@ -470,26 +480,30 @@ export function buildDebriefSystemPrompt(
 - 알고 있던 비밀: ${character.knownSecrets.join(" / ")}
 - 배정된 성향: ${persona.mbtiType}(압박내성 ${persona.pressureTolerance}, 코너에 몰리면 "${persona.corneredReaction}" 경향)
 - 플레이어의 최종 지목: ${wasAccused ? "플레이어가 당신을 범인으로 지목했다" : "플레이어는 당신을 지목하지 않았다"}
+- 심문 여부: ${wasInterrogated ? "형사가 실제로 이 캐릭터를 심문했다(아래 대화 기록 참고)" : "형사가 이 캐릭터는 한 번도 심문하지 않고 게임이 끝났다 — 아래 대화 기록이 비어있는 게 정상이다"}
 
 ${buildDebriefToneSection(persona)}
 
 [이야기할 내용 — 자연스럽게 섞어서]
 - 내가 맡은 역할이 범인이었는지 아니었는지, 어떤 입장이었는지
-- 형사(플레이어)가 심문하면서 어떤 질문이나 전략이 특히 곤란하거나 인상 깊었는지 — 아래 실제 대화 기록을 근거로 구체적으로 언급할 것(예: "그때 CCTV 얘기 꺼내셨을 때 진짜 당황했잖아요")
+${interrogationRecapLine}
 - 이 캐릭터/성향을 연기하면서 스스로 느낀 점 — 쉬웠는지 어려웠는지, 왜 그런지
 - 플레이어의 최종 지목 결과에 대한 짧은 반응
 - 마지막으로 짧게 마무리(단, 매번 응원·감사 인사로 끝낼 필요는 없다 — [말투] 지침에 맞는 태도로)
-${buildDebriefRoomLayoutSection(character, wasAccused)}
+${wasInterrogated ? buildDebriefRoomLayoutSection(character, wasAccused) : ""}
 
 [절대 금지]
-- 진실 성서·아래 실제 대화 기록에 없는 내용을 지어내지 않는다.
+- 진실 성서·아래 실제 대화 기록에 없는 내용을 지어내지 않는다 — 특히 심문이 없었다면 질문·대사를 절대 지어내지 않는다.
 - 형식적인 문구("[모드: ...]" 등) 없이 순수한 대화체 텍스트로만 답한다.
 - 규칙을 이유로 소감 말하기를 거부하지 않는다 — 이 장면의 목적 자체가 솔직한 뒤풀이 수다다.`;
 }
 
 /** 디브리핑 장면 유도용 마지막 사용자 턴. */
-export function buildDebriefDirective(): string {
-  return `(장면 지시 — 게임이 끝난 뒤풀이 장면. 형사가 아니라 함께 게임한 친구로서 편하게 이야기해줘) 캐릭터 연기를 내려놓고, 위 지침대로 자연스러운 대화체로 3~6문장 정도의 소감을 말해줘.`;
+export function buildDebriefDirective(wasInterrogated: boolean = true): string {
+  const note = wasInterrogated
+    ? ""
+    : " (형사가 너는 심문한 적이 없다는 걸 기억하고, 있지도 않은 질문을 지어내지 말아줘)";
+  return `(장면 지시 — 게임이 끝난 뒤풀이 장면. 형사가 아니라 함께 게임한 친구로서 편하게 이야기해줘)${note} 캐릭터 연기를 내려놓고, 위 지침대로 자연스러운 대화체로 3~6문장 정도의 소감을 말해줘.`;
 }
 
 /** 심문종료(락아웃) 시 캐릭터·진범 여부와 무관하게 노출되는 고정 문구. */

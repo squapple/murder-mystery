@@ -130,6 +130,13 @@ export default function GameApp() {
   // 이 값을 실제로 사용하고, 무고자에겐 그냥 무시되는 값이라 안전하다.
   const [warnedCharacters, setWarnedCharacters] = useState<Set<string>>(new Set());
   const [collectedEvidenceIds, setCollectedEvidenceIds] = useState<Set<string>>(new Set());
+  // Phase 36 — 실전 리포트: 심문 중 "신발/휴대폰 보여달라"고 요청해 round-review로
+  // 해금된 물증이 다음 라운드에 클릭하지도 않았는데 이미 확보(✓, 초록색)된 채로
+  // 나타났다. 요청은 "조사 모드에 이 카드가 나타나게" 만드는 것까지만 하고, 실제
+  // "확보"(채점 반영 + ✓ 표시)는 다른 카드처럼 직접 클릭해야만 되도록 분리했다 —
+  // action_triggered 물증의 가시성은 이제 이 목록으로, 확보 여부는 여전히
+  // collectedEvidenceIds로 따로 관리한다.
+  const [unlockedActionIds, setUnlockedActionIds] = useState<Set<string>>(new Set());
   const [adHocEvidence, setAdHocEvidence] = useState<AdHocEvidenceCard[]>([]);
   // 효율 보너스가 시간 기반으로 바뀌며(Phase 30) 조사 시작 시각을 잰다 — 1라운드
   // 진입(startInvestigation) 시점에 채워지고, 최종 지목 때 이 시각부터 경과한 시간을 잰다.
@@ -174,6 +181,7 @@ export default function GameApp() {
     setLockedCharacters(new Set(resumeCandidate.lockedCharacters));
     setWarnedCharacters(new Set(resumeCandidate.warnedCharacters ?? []));
     setCollectedEvidenceIds(new Set(resumeCandidate.collectedEvidenceIds));
+    setUnlockedActionIds(new Set(resumeCandidate.unlockedActionIds ?? []));
     setAdHocEvidence(resumeCandidate.adHocEvidence ?? []);
     setInvestigationStartedAt(resumeCandidate.investigationStartedAt ?? Date.now());
     setNotes(resumeCandidate.notes);
@@ -209,6 +217,7 @@ export default function GameApp() {
     setLockedCharacters(new Set());
     setWarnedCharacters(new Set());
     setCollectedEvidenceIds(new Set());
+    setUnlockedActionIds(new Set());
     setAdHocEvidence([]);
     setInvestigationStartedAt(null);
     setNotes("");
@@ -259,6 +268,7 @@ export default function GameApp() {
       lockedCharacters: Array.from(lockedCharacters),
       warnedCharacters: Array.from(warnedCharacters),
       collectedEvidenceIds: Array.from(collectedEvidenceIds),
+      unlockedActionIds: Array.from(unlockedActionIds),
       adHocEvidence,
       investigationStartedAt,
       notes,
@@ -274,6 +284,7 @@ export default function GameApp() {
     lockedCharacters,
     warnedCharacters,
     collectedEvidenceIds,
+    unlockedActionIds,
     adHocEvidence,
     investigationStartedAt,
     notes,
@@ -427,8 +438,11 @@ export default function GameApp() {
         if (isFinalRound) {
           setLateRoundItemNames(foundNames);
         } else {
+          // Phase 36 — 여기서는 "조사 모드에 카드가 나타나게"만 하고, 실제 확보(✓,
+          // 채점 반영)는 물증과 똑같이 플레이어가 직접 클릭해야 되도록 바꿨다.
+          // collectedEvidenceIds에는 손대지 않는다.
           if (unlockedIds.length > 0) {
-            setCollectedEvidenceIds((prev) => {
+            setUnlockedActionIds((prev) => {
               const next = new Set(prev);
               unlockedIds.forEach((id) => next.add(id));
               return next;
@@ -439,11 +453,6 @@ export default function GameApp() {
               ...prev,
               ...newAdHoc.filter((e) => !prev.some((p) => p.id === e.id)),
             ]);
-            setCollectedEvidenceIds((prev) => {
-              const next = new Set(prev);
-              newAdHoc.forEach((e) => next.add(e.id));
-              return next;
-            });
           }
           newEvidenceNames.push(...foundNames);
         }
@@ -644,6 +653,7 @@ export default function GameApp() {
           <InvestigationBoard
             round={round}
             collectedIds={collectedEvidenceIds}
+            unlockedActionIds={unlockedActionIds}
             adHocEvidence={adHocEvidence}
             onCollect={handleCollectEvidence}
           />

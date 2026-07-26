@@ -7,6 +7,10 @@ import type { AdHocEvidenceCard } from "@/lib/game-client-types";
 interface InvestigationBoardProps {
   round: number;
   collectedIds: Set<string>;
+  /** Phase 36 — action_triggered 물증이 조사 모드에 "나타나는지" 여부. 심문 중
+   * 요청으로 round-review가 해금하면 여기 채워진다 — 확보(collectedIds) 여부와는
+   * 별개다. 실제 확보는 다른 카드와 마찬가지로 직접 클릭해야만 이루어진다. */
+  unlockedActionIds: Set<string>;
   /** 사전 등록되지 않은 임의의 소지품 요청 결과 카드("사건과 무관" 고정) */
   adHocEvidence: AdHocEvidenceCard[];
   onCollect: (evidenceId: string) => void;
@@ -15,6 +19,7 @@ interface InvestigationBoardProps {
 export default function InvestigationBoard({
   round,
   collectedIds,
+  unlockedActionIds,
   adHocEvidence,
   onCollect,
 }: InvestigationBoardProps) {
@@ -22,9 +27,11 @@ export default function InvestigationBoard({
 
   const roundEvidence = getAvailableEvidenceForRound(round);
   // action_triggered 증거(예: 신발 요청)는 라운드와 무관하게 심문 중 행동으로만
-  // 해금된다 — 실제로 확보된 것만 보드에 노출한다.
+  // 해금된다 — Phase 36: "해금됨"과 "확보됨"을 분리했다. 여기서는 보드에 카드가
+  // 나타나는 시점만 결정하고, ✓ 확보는 renderCard의 클릭 로직이 collectedIds로
+  // 별도 판단한다.
   const actionEvidence = EVIDENCE.filter(
-    (e) => e.revealTiming === "action_triggered" && collectedIds.has(e.id)
+    (e) => e.revealTiming === "action_triggered" && unlockedActionIds.has(e.id)
   );
   // 임의 소지품 요청 카드는 evidence.ts의 고정 목록에 없으므로 EvidenceItem 형태로
   // 변환해 같은 그리드에 얹는다 — 내용은 항상 "사건과 무관" 고정 문구.

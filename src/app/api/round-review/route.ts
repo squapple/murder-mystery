@@ -17,6 +17,7 @@ import type OpenAI from "openai";
 import { getNimClient, NIM_MODEL, getReasoningExtraParams } from "@/lib/nim-client";
 import { buildItemRequestReviewPrompt } from "@/lib/prompts/actor-prompt";
 import { CHARACTER_LIST, getActorPromptView } from "@/lib/game-data/characters";
+import { getEvidenceById } from "@/lib/game-data/evidence";
 import { decodeCastingToken } from "@/lib/casting";
 import type { CharacterId } from "@/lib/game-data/types";
 
@@ -117,7 +118,15 @@ export async function POST(req: NextRequest) {
             (item) => item.itemLabel === itemName || itemName.includes(item.itemLabel)
           );
           if (registered) {
-            if (!collectedIds.has(registered.evidenceId)) {
+            // Phase 36: 등록된 물품이라도 evidence.ts상 revealTiming이
+            // "action_triggered"인 것만 여기서 즉시 unlock한다. round-gated 물증
+            // (예: 박서연 "휴대폰" → ev-park-phone-photos, round3_open)은 자기
+            // 라운드가 되면 조사 모드에 알아서 나타나므로 여기서 손대지 않는다 —
+            // 매칭에 성공했다는 사실 자체만으로 아래 else 분기(임의 물품 "사건과
+            // 무관" 카드 생성)를 막아, "지금은 없다고 했다가 나중엔 있었다"는
+            // 모순을 방지하는 것으로 충분하다.
+            const evidence = getEvidenceById(registered.evidenceId);
+            if (evidence?.revealTiming === "action_triggered" && !collectedIds.has(registered.evidenceId)) {
               unlockedEvidenceIds.push(registered.evidenceId);
             }
           } else {

@@ -25,6 +25,10 @@ export interface SavedGameState {
    * 없을 수 있어 GameApp.tsx에서 읽을 때 `?? []`로 방어한다. */
   warnedCharacters?: string[];
   collectedEvidenceIds: string[];
+  /** Phase 36 — 심문 중 요청으로 해금된 action_triggered 물증이 조사 모드에 "나타나는지"
+   * 여부만 관리한다(확보 여부는 여전히 collectedEvidenceIds). 구버전 저장 데이터엔
+   * 없을 수 있어 GameApp.tsx에서 읽을 때 `?? []`로 방어한다. */
+  unlockedActionIds?: string[];
   adHocEvidence: AdHocEvidenceCard[];
   /** 게임 시작 시각(epoch ms) — 효율 보너스가 시간 기반으로 바뀌며(Phase 30) 이어하기 시에도
    * 원래 시작 시점부터 경과 시간을 잴 수 있도록 totalQuestionChars 대신 이걸 저장한다. */

@@ -1,8 +1,13 @@
 @import "tailwindcss";
 
+/* Phase 36 — 실전 피드백: 모바일/태블릿에서 시스템이 라이트 모드면 body 배경이
+   흰색으로 뜨는데, 컴포넌트들은 전부 bg-neutral-900 같은 다크 전용 색을 하드코딩해
+   써서 가독성이 깨졌다. 이 게임은 애초에 라이트 테마를 지원한 적이 없으므로
+   (prefers-color-scheme: dark) 미디어쿼리에 기대지 말고 다크를 고정값으로 못 박는다. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -10,13 +15,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

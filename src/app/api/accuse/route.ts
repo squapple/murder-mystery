@@ -92,13 +92,17 @@ export async function POST(req: NextRequest) {
 
       try {
         const history = body.conversationsByCharacter?.[id] ?? [];
+        // Phase 36 — 이 캐릭터를 한 번도 심문하지 않고 지목까지 갔을 때, 디브리핑이
+        // "그때 CCTV 얘기 던지실 때" 같은 있지도 않은 대화를 지어내던 문제를 고쳤다.
+        const wasInterrogated = history.length > 0;
         const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
           {
             role: "system",
             content: buildDebriefSystemPrompt(
               getActorPromptView(character),
               persona,
-              id === accusedCharacterId
+              id === accusedCharacterId,
+              wasInterrogated
             ),
           },
           ...history.map(
@@ -107,7 +111,7 @@ export async function POST(req: NextRequest) {
               content: turn.content,
             })
           ),
-          { role: "user", content: buildDebriefDirective() },
+          { role: "user", content: buildDebriefDirective(wasInterrogated) },
         ];
 
         const completion = await client.chat.completions.create({

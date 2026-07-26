@@ -80,6 +80,19 @@ export const CHARACTERS: Record<CharacterId, CharacterSheet> = {
         narrativeResult:
           "최근에 새로 산 신발이라 흙 반응이 전혀 없음 — 사건과 무관, 오히려 새 신발이라는 점이 약간의 의아함만 남김",
       },
+      // Phase 36: "휴대폰"이 requestableItems에 없어서, 형사가 박서연 휴대폰을
+      // 보여달라고 하면 round-review가 이걸 사전 등록된 ev-park-phone-photos와
+      // 매칭하지 못하고 "사건과 무관" 임의 카드를 만들어버렸다 — 그런데 3라운드가
+      // 되면 ev-park-phone-photos가 자동으로 공개되며 정반대 내용("수상한 사진
+      // 발견")이 뜨는 모순이 생겼다(실전 리포트). 신발과 동일하게 정식 등록해 이
+      // 모순을 없앤다.
+      {
+        itemLabel: "휴대폰",
+        keywords: ["휴대폰", "핸드폰", "폰", "사진첩", "사진"],
+        evidenceId: "ev-park-phone-photos",
+        narrativeResult:
+          "사진첩에 정민아와 김영훈이 손을 잡거나 다정한 모습을 몰래 찍어둔 사진이 한 장 있다 — 왜 이런 사진을 갖고 있는지 캐물으면 당황하며 말끝을 흐린다(사건과 직접 관련은 없지만 의심스러운 정황으로 남긴다)",
+      },
     ],
   },
 
