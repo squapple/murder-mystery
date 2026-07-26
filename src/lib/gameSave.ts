@@ -29,10 +29,6 @@ export interface SavedGameState {
    * 여부만 관리한다(확보 여부는 여전히 collectedEvidenceIds). 구버전 저장 데이터엔
    * 없을 수 있어 GameApp.tsx에서 읽을 때 `?? []`로 방어한다. */
   unlockedActionIds?: string[];
-  /** Phase 37 — 실제로 질문을 보낸 라운드 번호 목록. 이 라운드에 심문을 안 했으면
-   * 새 증거를 확보(클릭)할 수 없게 막는 데 쓴다. 구버전 저장 데이터엔 없을 수 있어
-   * GameApp.tsx에서 읽을 때 `?? []`로 방어한다. */
-  interrogatedRounds?: number[];
   adHocEvidence: AdHocEvidenceCard[];
   /** 게임 시작 시각(epoch ms) — 효율 보너스가 시간 기반으로 바뀌며(Phase 30) 이어하기 시에도
    * 원래 시작 시점부터 경과 시간을 잴 수 있도록 totalQuestionChars 대신 이걸 저장한다. */

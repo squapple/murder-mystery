@@ -36,6 +36,16 @@ export interface EvidenceItem {
    */
   breakdownCategory?: "A" | "B" | "C";
   /**
+   * Phase 38 — "증거 수집" 채점 대상 여부를 명시적으로 표시한다. 실전 피드백: 라운드만
+   *되면 자동으로 뜨는 물증/진술 증거를 그냥 클릭하는 것만으로 점수가 다 채워져서,
+   * 심문 한 번 없이 오답을 지목해도 A등급이 나오는 문제가 있었다. "심문으로 직접
+   * 요구해서 찾아낸" action_triggered 증거 중에서도, 사건 해결에 실제로 의미 있는
+   * 것만 채점 대상으로 삼는다(예: 이현우 신발의 흙 성분=의미있음, 박서연/정민아
+   * 신발처럼 "사건과 무관"으로 판명되는 것=의미없음). 생략 시 false로 취급 —
+   * scoring.ts의 SCORING_EVIDENCE가 이 필드를 기준으로 채점 대상을 정한다.
+   */
+  scorable?: boolean;
+  /**
    * 조사 모드에서 카드를 클릭했을 때 확대 표시되는 상세 설명. Phase 35부터는 사실상
    * 모든 항목에 채워져 있다 — revealedFact(카드 면)는 짧은 headline, detail은 실제
    * 서사가 담긴 상세로 역할을 분리했다.
@@ -156,8 +166,12 @@ export const EVIDENCE: EvidenceItem[] = [
     revealTiming: "action_triggered",
     isBreakdownTrigger: true,
     breakdownCategory: "B",
+    // Phase 38: 진범을 실제로 특정하는 결정적 물증이라 "증거 수집" 채점 대상.
+    scorable: true,
   },
   {
+    // Phase 38: "사건과 무관"으로 결론 나는 함정성 요청 결과라 증거 수집 점수에는
+    // 반영하지 않는다(scorable 생략=false) — 여전히 클릭해서 확보/열람은 가능하다.
     id: "ev-shoe-park",
     category: "physical",
     name: "박서연 신발 확인",
@@ -166,6 +180,8 @@ export const EVIDENCE: EvidenceItem[] = [
     revealTiming: "action_triggered",
   },
   {
+    // Phase 38: 의심스러운 정황이긴 하지만 사건 해결에 결정적으로 쓰이진 않는
+    // 미해결 떡밥이라 증거 수집 점수에는 반영하지 않는다(scorable 생략=false).
     id: "ev-shoe-jeong",
     category: "physical",
     name: "정민아 신발 확인",
@@ -179,6 +195,8 @@ export const EVIDENCE: EvidenceItem[] = [
     // "심문 중 실제로 휴대폰을 보여달라고 요청했을 때만" 해금되는 구조로 바꿨다
     // (사용자 지적: 3라운드에 그냥 해금되는 게 아니라 요청이 선행돼야 한다).
     // characters.ts 박서연 requestableItems의 "휴대폰" 항목과 짝지어져 있다.
+    // Phase 38: 살인 사건 자체와는 무관한 서브플롯(정민아-김영훈 관계 정황)이라
+    // 증거 수집 점수에는 반영하지 않는다(scorable 생략=false).
     id: "ev-park-phone-photos",
     category: "physical",
     name: "박서연 휴대폰 사진첩",
