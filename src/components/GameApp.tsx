@@ -137,6 +137,10 @@ export default function GameApp() {
   // action_triggered 물증의 가시성은 이제 이 목록으로, 확보 여부는 여전히
   // collectedEvidenceIds로 따로 관리한다.
   const [unlockedActionIds, setUnlockedActionIds] = useState<Set<string>>(new Set());
+  // Phase 37 — 증거 수집 점수가 심문 없이 클릭만으로 채워지던 문제 수정용. 실제로
+  // 질문을 보낸 라운드 번호들의 집합 — InvestigationBoard가 "이 라운드엔 아직
+  // 아무도 심문 안 했다"를 판단하는 데 쓴다.
+  const [interrogatedRounds, setInterrogatedRounds] = useState<Set<number>>(new Set());
   const [adHocEvidence, setAdHocEvidence] = useState<AdHocEvidenceCard[]>([]);
   // 효율 보너스가 시간 기반으로 바뀌며(Phase 30) 조사 시작 시각을 잰다 — 1라운드
   // 진입(startInvestigation) 시점에 채워지고, 최종 지목 때 이 시각부터 경과한 시간을 잰다.
@@ -182,6 +186,7 @@ export default function GameApp() {
     setWarnedCharacters(new Set(resumeCandidate.warnedCharacters ?? []));
     setCollectedEvidenceIds(new Set(resumeCandidate.collectedEvidenceIds));
     setUnlockedActionIds(new Set(resumeCandidate.unlockedActionIds ?? []));
+    setInterrogatedRounds(new Set(resumeCandidate.interrogatedRounds ?? []));
     setAdHocEvidence(resumeCandidate.adHocEvidence ?? []);
     setInvestigationStartedAt(resumeCandidate.investigationStartedAt ?? Date.now());
     setNotes(resumeCandidate.notes);
@@ -218,6 +223,7 @@ export default function GameApp() {
     setWarnedCharacters(new Set());
     setCollectedEvidenceIds(new Set());
     setUnlockedActionIds(new Set());
+    setInterrogatedRounds(new Set());
     setAdHocEvidence([]);
     setInvestigationStartedAt(null);
     setNotes("");
@@ -269,6 +275,7 @@ export default function GameApp() {
       warnedCharacters: Array.from(warnedCharacters),
       collectedEvidenceIds: Array.from(collectedEvidenceIds),
       unlockedActionIds: Array.from(unlockedActionIds),
+      interrogatedRounds: Array.from(interrogatedRounds),
       adHocEvidence,
       investigationStartedAt,
       notes,
@@ -285,6 +292,7 @@ export default function GameApp() {
     warnedCharacters,
     collectedEvidenceIds,
     unlockedActionIds,
+    interrogatedRounds,
     adHocEvidence,
     investigationStartedAt,
     notes,
@@ -345,6 +353,12 @@ export default function GameApp() {
     const nextHistory: ChatMessage[] = [...history, { role: "user", content: userMessage }];
     setConversations((prev) => ({ ...prev, [characterId]: nextHistory }));
     setLoadingMap((prev) => ({ ...prev, [characterId]: true }));
+    // Phase 37 — 실전 리포트: 심문을 한 번도 안 하고 조사 모드 카드만 클릭해도
+    // 증거 수집/동기 파악 점수가 다 채워져서 오답이어도 A등급이 나오는 문제가
+    // 있었다. 실제로 질문을 던진(전송 성공 여부와 무관하게, 시도했다는 사실 자체가
+    // 중요) 라운드만 기록해두고, InvestigationBoard에서 이 라운드에 아직 아무도
+    // 심문하지 않았다면 새 증거를 확보(클릭)할 수 없게 막는다.
+    setInterrogatedRounds((prev) => new Set(prev).add(round));
 
     try {
       const res = await fetch("/api/interrogate", {
@@ -654,6 +668,7 @@ export default function GameApp() {
             round={round}
             collectedIds={collectedEvidenceIds}
             unlockedActionIds={unlockedActionIds}
+            hasInterrogatedThisRound={interrogatedRounds.has(round)}
             adHocEvidence={adHocEvidence}
             onCollect={handleCollectEvidence}
           />

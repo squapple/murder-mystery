@@ -11,6 +11,13 @@ interface InvestigationBoardProps {
    * 요청으로 round-review가 해금하면 여기 채워진다 — 확보(collectedIds) 여부와는
    * 별개다. 실제 확보는 다른 카드와 마찬가지로 직접 클릭해야만 이루어진다. */
   unlockedActionIds: Set<string>;
+  /** Phase 37 — 이 라운드에서 실제로 심문(메시지 전송)을 한 번이라도 했는지. 실전
+   * 리포트: 심문 한 번 없이 조사 모드 카드만 클릭해도 증거 수집·동기 파악 점수가
+   * 다 채워져서 오답이어도 A등급이 나왔다 — 라운드 게이트가 걸린 증거(물증/진술)는
+   * 이 라운드에 최소 한 번은 심문해야만 확보할 수 있게 막는다. action_triggered
+   * 물증(신발·휴대폰 등)은 애초에 요청 자체가 심문 행위이므로 이 게이트에서 제외한다.
+   */
+  hasInterrogatedThisRound: boolean;
   /** 사전 등록되지 않은 임의의 소지품 요청 결과 카드("사건과 무관" 고정) */
   adHocEvidence: AdHocEvidenceCard[];
   onCollect: (evidenceId: string) => void;
@@ -20,6 +27,7 @@ export default function InvestigationBoard({
   round,
   collectedIds,
   unlockedActionIds,
+  hasInterrogatedThisRound,
   adHocEvidence,
   onCollect,
 }: InvestigationBoardProps) {
@@ -56,8 +64,13 @@ export default function InvestigationBoard({
    * 확보(✓)되도록 통일했다(이전엔 진술 증거가 라운드 전환 시 자동 확보돼, 카드를
    * 클릭하는 행위 자체가 무의미했다는 지적을 반영). */
   function renderCard(e: EvidenceItem) {
-    const locked = Boolean(e.requiresEvidenceId && !collectedIds.has(e.requiresEvidenceId));
     const collected = collectedIds.has(e.id);
+    const missingPrereq = Boolean(e.requiresEvidenceId && !collectedIds.has(e.requiresEvidenceId));
+    // Phase 37 — 라운드 게이트 증거는 이 라운드에 심문을 한 번도 안 했으면 확보 자체를
+    // 막는다. action_triggered 증거는 요청 자체가 이미 심문 행위라 제외.
+    const needsInterrogation =
+      !collected && e.revealTiming !== "action_triggered" && !hasInterrogatedThisRound;
+    const locked = missingPrereq || needsInterrogation;
     return (
       <button
         key={e.id}
@@ -78,8 +91,11 @@ export default function InvestigationBoard({
         {(collected || !locked) && (
           <div className="mt-0.5 text-xs text-neutral-400">{e.revealedFact}</div>
         )}
-        {locked && (
+        {missingPrereq && (
           <div className="mt-0.5 text-xs text-neutral-600">다른 물증을 먼저 확보하세요</div>
+        )}
+        {needsInterrogation && !missingPrereq && (
+          <div className="mt-0.5 text-xs text-neutral-600">이 라운드에서 먼저 심문을 진행하세요</div>
         )}
         {!locked && (
           <div className="mt-1 text-[10px] text-neutral-500">

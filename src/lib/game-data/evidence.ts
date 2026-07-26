@@ -115,8 +115,10 @@ export const EVIDENCE: EvidenceItem[] = [
     category: "physical",
     name: "통화/삭제문자 복구",
     revealedFact: "피해자의 삭제된 통화 기록 복구",
+    // Phase 37: "인사평가와 관련된 통화"라고만 되어 있어 이현우의 동기와 연결이
+    // 안 됐다는 지적 — 통화 내용이 구체적으로 이현우의 인사평가였다고 명시했다.
     detail:
-      "피해자 김영훈의 휴대폰에서 22:00경 본사와 나눈 통화 기록이 복구됐다 — 인사평가와 관련된 통화였던 것으로 보인다.",
+      "피해자 김영훈의 휴대폰에서 22:00경 본사와 나눈 통화 기록이 복구됐다 — 이현우의 이번 분기 인사평가에 대해 논의한 통화였던 것으로 보인다.",
     revealTiming: "round1_end",
   },
   {
@@ -173,12 +175,16 @@ export const EVIDENCE: EvidenceItem[] = [
     revealTiming: "action_triggered",
   },
   {
+    // Phase 37: 라운드만 되면 요청 여부와 무관하게 자동으로 뜨던 걸, 신발과 동일하게
+    // "심문 중 실제로 휴대폰을 보여달라고 요청했을 때만" 해금되는 구조로 바꿨다
+    // (사용자 지적: 3라운드에 그냥 해금되는 게 아니라 요청이 선행돼야 한다).
+    // characters.ts 박서연 requestableItems의 "휴대폰" 항목과 짝지어져 있다.
     id: "ev-park-phone-photos",
     category: "physical",
     name: "박서연 휴대폰 사진첩",
     revealedFact: "박서연 휴대폰에서 수상한 사진 발견",
     detail: "정민아와 김영훈이 손을 잡거나 다정한 모습을 몰래 찍어둔 사진이 한 장 발견됐다.",
-    revealTiming: "round3_open",
+    revealTiming: "action_triggered",
   },
   {
     // Phase 30: 살해도구 서브플롯. 3라운드에 개방되는 결정적 물증이지만, 이것 하나만으로는
@@ -200,11 +206,15 @@ export const EVIDENCE: EvidenceItem[] = [
     // 정보원을 가리키는 익명 라벨로 바꿨다 — 카드 면(revealedFact)만 봐서는 누구 얘기인지
     // 알 수 없고, 클릭해야 실제 내용이 드러난다. name과 revealedFact를 동일한 문구로
     // 중복 노출하지 않도록 revealedFact는 짧은 화제 힌트로 따로 뒀다.
+    // Phase 37: "성과를 둘러싼 갈등"이라는 문구가 너무 두루뭉술해서 박서연의 실제
+    // 동기(김영훈이 그녀의 성과를 자기 것처럼 보고했다는 것)를 찾아볼 수 없다는
+    // 지적 — 가로채기 구도를 명확히 드러내도록 detail을 구체화했다.
     id: "stmt-park-dispute-reason",
     category: "statement",
     name: "팀원 A의 증언",
     revealedFact: "성과 문제에 대한 이야기",
-    detail: "박서연과 김영훈 팀장 사이에 성과를 둘러싼 갈등이 있었다는 이야기가 있다.",
+    detail:
+      "박서연이 진행했던 프로젝트 성과를 팀장 김영훈이 마치 자기 성과인 것처럼 보고했다는 이야기가 있다 — 박서연은 이 일로 팀장에게 깊은 불만을 갖고 있었다고 한다.",
     revealTiming: "round1_end",
   },
   {
