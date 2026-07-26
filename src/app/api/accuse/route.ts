@@ -23,8 +23,9 @@ import { judgeAccusation } from "@/lib/scoring";
 import { CHARACTERS, CHARACTER_LIST, getActorPromptView } from "@/lib/game-data/characters";
 import { decodeCastingToken } from "@/lib/casting";
 import { PERSONAS } from "@/lib/game-data/personas";
-import { getNimClient, NIM_MODEL, getReasoningExtraParams } from "@/lib/nim-client";
+import { getNimClient, NIM_MODEL, POLISH_MODEL, getReasoningExtraParams } from "@/lib/nim-client";
 import { buildDebriefSystemPrompt, buildDebriefDirective } from "@/lib/prompts/actor-prompt";
+import { polishText } from "@/lib/text-polish";
 import type { CharacterId } from "@/lib/game-data/types";
 
 // Edge 런타임 되돌림 — 05_history_nan2026.md Phase 18 참고 (interrogate/route.ts와 동일 이유).
@@ -117,7 +118,16 @@ export async function POST(req: NextRequest) {
           ...reasoningExtraParams,
         } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming & typeof reasoningExtraParams);
 
-        debriefsById.set(id, (completion.choices[0]?.message?.content ?? "").trim());
+        const rawDebrief = (completion.choices[0]?.message?.content ?? "").trim();
+        // Phase 33 — 심문 대사와 동일하게, 결과 화면에 노출되는 디브리핑도 오타/중복
+        // 음절 후처리를 한 번 거친다(실패 시 원문 그대로 사용, polishText 참고).
+        const polished = await polishText(
+          client,
+          POLISH_MODEL,
+          rawDebrief,
+          getReasoningExtraParams(POLISH_MODEL)
+        );
+        debriefsById.set(id, polished);
       } catch (err) {
         // 실패해도 결과 자체(정답/점수)는 정상 반환한다 — 이 캐릭터의 디브리핑만 빈 문자열로.
         console.error(`[accuse] 디브리핑 생성 실패(${id}), 빈 문자열로 대체:`, err);

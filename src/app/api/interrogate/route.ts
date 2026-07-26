@@ -8,8 +8,10 @@ import type OpenAI from "openai";
 import {
   getNimClient,
   NIM_MODEL,
+  POLISH_MODEL,
   getReasoningExtraParams,
 } from "@/lib/nim-client";
+import { polishText } from "@/lib/text-polish";
 import {
   buildActorSystemPrompt,
   parseActorResponse,
@@ -256,7 +258,12 @@ export async function POST(req: NextRequest) {
           console.error("[interrogate] 락아웃 판정 콜 실패, 잠그지 않음:", judgeErr);
         }
       }
-      const responseText = locked ? INTERROGATION_LOCKED_TEXT : parsed.text;
+      // Phase 33 — 오타/중복 음절 후처리. 고정 잠금 문구는 이미 깨끗하므로 건너뛰고,
+      // 실제로 화면에 보여줄 대사(경고 턴 포함)만 교정 콜을 한 번 더 거친다. 실패해도
+      // polishText가 원문을 그대로 반환하므로 이 단계 때문에 응답 전체가 실패하지 않는다.
+      const responseText = locked
+        ? INTERROGATION_LOCKED_TEXT
+        : await polishText(client, POLISH_MODEL, parsed.text, getReasoningExtraParams(POLISH_MODEL));
 
       // 소지품 요청(신발 등) 판정은 더 이상 여기서 하지 않는다 — 라운드 종료 시
       // /api/round-review가 그 라운드 대화 전체를 한 번에 검토해 일괄 처리한다

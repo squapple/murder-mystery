@@ -53,6 +53,16 @@ export function getNimClient(): OpenAI {
 export const NIM_MODEL = process.env.NVIDIA_NIM_MODEL || "google/diffusiongemma-26b-a4b-it";
 
 /**
+ * Phase 33 — 오타/중복 음절("증라도", "뿐뿐입니다", "침묵하다하다가" 등) 후처리용
+ * 별도 모델 슬롯. 지금은 NIM_MODEL과 동일한 모델을 그대로 쓴다 — 무료·빠르고
+ * 한국어 호환이 되는 다른 모델을 찾기 어렵다는 게 사용자 판단(새 모델 물색은
+ * 보류). 다만 이 방식으로도 글리치가 해결이 안 되면, 후처리 단계만 더 고급
+ * 모델로 바꿔볼 수 있도록 이 상수를 따로 분리해뒀다 — 그때는 이 env var만
+ * 채우면 되고 text-polish.ts 쪽 코드는 손댈 필요가 없다.
+ */
+export const POLISH_MODEL = process.env.NVIDIA_POLISH_MODEL || NIM_MODEL;
+
+/**
  * deepseek-v4-flash 기준 검증 결과: thinking 켜고 reasoning_effort=high가 유일하게
  * 안정적이었다 (medium은 두 차례 재현된 실측으로 폐기 — high 55~71초 대비 medium
  * 138~150초). 이 설정은 deepseek 계열 전용이다.
