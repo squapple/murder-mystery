@@ -12,22 +12,25 @@
 // 증거"는 클릭 하나로 채점에 반영되는 게 의미가 없다는 판단 — 이제 "증거 수집"은
 // evidence.ts에서 `scorable: true`로 명시된 것만 집계한다. 이 플래그는 오직
 // action_triggered(심문 중 직접 요구해서 찾아낸) 증거 중에서도 사건 해결에 실제로
-// 의미 있는 것에만 붙어 있다(예: 이현우 신발의 흙 성분=의미있음, 박서연/정민아
-// 신발이나 박서연 휴대폰처럼 "사건과 무관"으로 판명되는 함정 요청=의미없음). 라운드
-// 게이트가 걸린 물증·진술 카드는 여전히 클릭해서 확보·열람할 수 있지만(심문 중
-// 근거로 제시하는 용도), 이제 그 자체로는 점수에 반영되지 않는다.
+// 의미 있는 것에만 붙어 있다.
+//
+// Phase 39 — 스토리라인 대규모 개편으로 evidence.ts의 증거 id가 전면 교체됐다(신발→
+// 가방, 돌→칼 등). SCORING_EVIDENCE/MOTIVE_EVIDENCE_IDS가 참조하던 옛 id를 새 id로
+// 재매핑만 했다 — 카테고리 구조(증거 수집/동기 파악/심문 효율 3분류)나 배점 자체는
+// 손대지 않았다(사용자가 이번엔 "붕괴 보너스만 제거, 나머지 채점 로직은 다음에"라고
+// 명시했는데, 애초에 Phase 32부터 "붕괴 보너스"란 이름의 별도 항목이 채점에 존재하지
+// 않았다 — 붕괴조건은 interrogate route의 락아웃 게이트로만 쓰였을 뿐 점수엔 관여하지
+// 않았으므로, 삭제할 게 아니라 evidence id 재매핑만으로 충분했다).
 
 import { EVIDENCE } from "./game-data/evidence";
 import { CHARACTER_LIST } from "./game-data/characters";
 import type { CharacterId } from "./game-data/types";
 
-/** 배역별 "동기 정황"을 직접 드러내는 증거 — 3배역 × 10점(§동기 파악)의 판정 기준.
- * "증거 수집" 채점과는 독립적으로 유지한다 — 사용자가 이번엔 "증거 수집"만 고쳐달라고
- * 명시했다. */
+/** 배역별 "동기 정황"을 직접 드러내는 증거 — 3배역 × 10점(§동기 파악)의 판정 기준. */
 const MOTIVE_EVIDENCE_IDS = [
-  "ev-deleted-call-recovery", // 이현우: 인사평가 통화 정황
-  "ev-corporate-card", // 정민아: 법인카드 비리
-  "stmt-park-dispute-reason", // 박서연: 성과 갈등
+  "stmt-lee-family-history", // 이현우: 여동생-김영훈 관련 가족사 정황
+  "stmt-jeong-breakup-reason", // 정민아: 김영훈과의 과거 연애 정황
+  "stmt-park-dispute-reason", // 박서연: 성과 가로채기 갈등
 ];
 
 /** "증거 수집" 채점 대상 — evidence.ts에서 scorable: true로 명시된 것만. */

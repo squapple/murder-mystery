@@ -9,7 +9,6 @@ export type CharacterId =
 
 export type InterrogationStrategy = "T" | "F";
 export type PressureTolerance = "높음" | "낮음";
-export type AlibiStatus = "unbreakable" | "breakable";
 
 export interface WitnessedEvent {
   /** 01_truth_bible.md §4-A 교차 목격 진술 ID (W1~W5) */
@@ -20,7 +19,6 @@ export interface WitnessedEvent {
 export interface StatementEvidenceRef {
   id: string;
   roundOpen: number;
-  isBreakdownTrigger?: boolean;
   /**
    * 선행 물증 게이트(18번 문서) — 이 목록 중 하나라도 collectedEvidenceIds에 있어야만
    * 액터가 이 진술 화제를 스스로 밝힐 수 있다. 비워두면(또는 생략하면) 기존처럼
@@ -63,16 +61,15 @@ export interface CharacterSheet {
   motiveFull: string; // ai_only — 진실 성서 원문 동기 전문
 
   isCulprit: boolean; // ai_only — 절대 플레이어 뷰에 렌더링 금지
-  alibiStatus: AlibiStatus; // ai_only — fair-play 가드레일 핵심 플래그
   knownSecrets: string[]; // ai_only
   statementEvidence: StatementEvidenceRef[]; // ai_only
-  breakdownTrigger: string | null; // ai_only — 이현우만 값 존재
   /**
-   * 붕괴 트리거 질문을 서버가 텍스트로 감지하기 위한 키워드 목록 (ai_only, 이현우만 값 존재).
-   * LLM 판정에 의존하지 않고 "카테고리 2개 이상 확보 + 이 키워드가 형사 메시지에 등장"을
-   * 서버가 결정론적으로 계산해, 진범 락아웃이 절대 조기에 걸리지 않도록 하는 하드 게이트다.
+   * 인내심 시스템(Phase 39) — 이 캐릭터에게 보낸 형사의 메시지가 이 키워드 중 하나라도
+   * 포함하면 서버가 결정론적으로 인내심 +1을 매긴다(LLM 판정 아님, patience.ts 참고).
+   * 붕괴조건 시스템의 breakdownTriggerKeywords(진범 전용)를 대체 — 이제 3인 전부 동일한
+   * 규칙으로, 진범 여부와 무관하게 각자의 동기/사건 관련 키워드를 갖는다.
    */
-  breakdownTriggerKeywords: string[];
+  patienceKeywords: string[]; // ai_only
   witnessedEvents: WitnessedEvent[]; // ai_only — §4-A 교차 목격 중 본인이 목격자인 것만
 
   /** 액터 계층 프롬프트에 주입되는 "본인 역할 파트" 진실 성서 발췌 (ai_only) */

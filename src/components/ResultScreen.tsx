@@ -75,6 +75,23 @@ export default function ResultScreen({
         </p>
       </section>
 
+      {/* Phase 39 — 심문 중엔 아무도 무너지지 않고 최종 지목은 순수 정황 추리로
+          이루어지는 새 설계라, 정답/오답과 무관하게 결정적 연결고리를 항상 여기서
+          짚어준다(사용자 지시) — 트릭을 못 찾은 플레이어도 "돌아보니 다 맞아떨어졌다"고
+          느끼도록. 이현우 개인 디브리핑(아래 뒤풀이 섹션)의 인게임 반응과는 별개로,
+          여기는 게임 마스터 시점의 객관적 해설이다. */}
+      <section className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
+        <h2 className="mb-2 font-semibold text-neutral-200">사건의 결정적 연결고리</h2>
+        <p className="text-sm leading-relaxed text-neutral-300">
+          이현우의 숙소(302호)는 박서연의 숙소(202호) 바로 위층이었다. 사건 당일 밤,
+          몸싸움 끝에 흉기를 휘두른 이현우는 자기 방 베란다에서 끈으로 흉기 손잡이의
+          구멍을 꿰어 아래층 박서연의 베란다로 내려놓았다 — 바닥에 닿자 한쪽 끝만 당겨
+          끈을 회수해, 흉기만 아래층에 남기고 자신은 흔적 없이 빠져나갔다. 숙소 배정표의
+          호수, 베란다 난간에 남은 마찰 흔적, 그리고 이현우의 가방 속 등산장비(로프·
+          카라비너) — 이 세 조각을 실제로 연결해서 캐물었는지가 이번 사건의 진짜 관건이었다.
+        </p>
+      </section>
+
       {lateRoundItemNames.length > 0 && (
         <section className="rounded-lg border border-amber-900 bg-amber-950/20 p-4">
           <h2 className="mb-1 font-semibold text-amber-300">마지막 라운드에 요청한 물품</h2>

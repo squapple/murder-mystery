@@ -11,6 +11,7 @@ import type {
   AccuseResult,
 } from "@/lib/game-client-types";
 import { saveGame, loadGame, clearGame, type SavedGameState } from "@/lib/gameSave";
+import { PATIENCE_MAX } from "@/lib/patience";
 import IntroScreen from "./IntroScreen";
 import CastingScreen from "./CastingScreen";
 import RoundTransitionScreen from "./RoundTransitionScreen";
@@ -22,12 +23,10 @@ import NotesPanel from "./NotesPanel";
 
 const TOTAL_ROUNDS = 3;
 
-// actor-prompt.ts의 PRESSURE_LABEL과 반드시 같은 문자열을 유지해야 한다 — 모델이
-// [모드: 동요]로 응답한 걸 그대로 감지해 탭에 인내심 경고 배지를 띄우는 용도.
-// (Phase 30 — 사용자 피드백: 인내심 시스템이 있다는 걸 플레이어가 알 방법이 없었다.
-// 진범/무고자 모두 같은 라벨을 쓰므로 이 배지 자체는 범인을 암시하지 않는다.)
-const PRESSURE_MODE_LABEL = "동요";
-const PRESSURE_LEVEL_MAX = 5;
+// Phase 39 — 인내심 게이지는 이제 서버(patience.ts)가 매 응답마다 내려주는 결정론적
+// 수치를 그대로 저장해서 그린다. 예전엔 모델이 [모드: 동요]로 응답한 걸 클라이언트가
+// 스캔해서 역산했는데, 이제 모델은 그런 신호를 아예 출력하지 않는다(actor-prompt.ts
+// 참고) — 서버가 이미 계산을 끝낸 값을 그대로 신뢰한다.
 
 /** 게이지 필 색상 — 단계가 오를수록 노랑→주황→빨강으로 escalate. */
 function pressureSegmentColor(level: number, index: number, locked: boolean): string {
@@ -55,9 +54,9 @@ function formatElapsedTime(elapsedMs: number): string {
 }
 
 interface InterrogateStreamResult {
-  mode: string;
   text: string;
   locked: boolean;
+  patienceLevel: number;
 }
 
 /**
@@ -124,13 +123,12 @@ export default function GameApp() {
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
   const [errorMap, setErrorMap] = useState<Record<string, string | null>>({});
   const [lockedCharacters, setLockedCharacters] = useState<Set<string>>(new Set());
-  // Phase 32 — 진범 하드게이트를 "경고 후 잠금" 2단계로 나누며, 이미 한 번 경고를
-  // 받은 캐릭터인지 서버에 알려줘야 해서 추가했다. mode==="동요"가 뜬 캐릭터는
-  // 무고자든 진범이든 대칭적으로 여기 추가된다 — 서버는 breakable 캐릭터에서만
-  // 이 값을 실제로 사용하고, 무고자에겐 그냥 무시되는 값이라 안전하다.
-  const [warnedCharacters, setWarnedCharacters] = useState<Set<string>>(new Set());
+  // Phase 39 — 서버(patience.ts)가 매 응답마다 내려주는 결정론적 인내심 수치를
+  // 그대로 저장한다. 예전 2단계 경고(warnedCharacters) 개념은 없앴다 — 게이지 숫자
+  // 자체가 곧 경고이므로 별도 상태가 필요 없다.
+  const [patienceLevels, setPatienceLevels] = useState<Record<string, number>>({});
   const [collectedEvidenceIds, setCollectedEvidenceIds] = useState<Set<string>>(new Set());
-  // Phase 36 — 실전 리포트: 심문 중 "신발/휴대폰 보여달라"고 요청해 round-review로
+  // Phase 36 — 실전 리포트: 심문 중 "가방 보여달라"고 요청해 round-review로
   // 해금된 물증이 다음 라운드에 클릭하지도 않았는데 이미 확보(✓, 초록색)된 채로
   // 나타났다. 요청은 "조사 모드에 이 카드가 나타나게" 만드는 것까지만 하고, 실제
   // "확보"(채점 반영 + ✓ 표시)는 다른 카드처럼 직접 클릭해야만 되도록 분리했다 —
@@ -179,7 +177,7 @@ export default function GameApp() {
     setActiveCharacterId(resumeCandidate.activeCharacterId);
     setConversations(resumeCandidate.conversations);
     setLockedCharacters(new Set(resumeCandidate.lockedCharacters));
-    setWarnedCharacters(new Set(resumeCandidate.warnedCharacters ?? []));
+    setPatienceLevels(resumeCandidate.patienceLevels ?? {});
     setCollectedEvidenceIds(new Set(resumeCandidate.collectedEvidenceIds));
     setUnlockedActionIds(new Set(resumeCandidate.unlockedActionIds ?? []));
     setAdHocEvidence(resumeCandidate.adHocEvidence ?? []);
@@ -215,7 +213,7 @@ export default function GameApp() {
     setLoadingMap({});
     setErrorMap({});
     setLockedCharacters(new Set());
-    setWarnedCharacters(new Set());
+    setPatienceLevels({});
     setCollectedEvidenceIds(new Set());
     setUnlockedActionIds(new Set());
     setAdHocEvidence([]);
@@ -266,7 +264,7 @@ export default function GameApp() {
       activeCharacterId,
       conversations,
       lockedCharacters: Array.from(lockedCharacters),
-      warnedCharacters: Array.from(warnedCharacters),
+      patienceLevels,
       collectedEvidenceIds: Array.from(collectedEvidenceIds),
       unlockedActionIds: Array.from(unlockedActionIds),
       adHocEvidence,
@@ -282,7 +280,7 @@ export default function GameApp() {
     activeCharacterId,
     conversations,
     lockedCharacters,
-    warnedCharacters,
+    patienceLevels,
     collectedEvidenceIds,
     unlockedActionIds,
     adHocEvidence,
@@ -357,7 +355,6 @@ export default function GameApp() {
           userMessage,
           round,
           collectedEvidenceIds: Array.from(collectedEvidenceIds),
-          alreadyWarned: warnedCharacters.has(characterId),
         }),
       });
       if (!res.ok) {
@@ -369,16 +366,11 @@ export default function GameApp() {
 
       setConversations((prev) => ({
         ...prev,
-        [characterId]: [...nextHistory, { role: "assistant", content: data.text, mode: data.mode }],
+        [characterId]: [...nextHistory, { role: "assistant", content: data.text }],
       }));
 
-      // Phase 32 — "동요" 모드가 뜬 캐릭터는 경고를 받은 것으로 기록해둔다. 진범
-      // 하드게이트가 "경고 후 잠금" 2단계로 바뀌면서, 다음 턴에 다시 조건이 충족될 때
-      // 서버가 이 캐릭터는 이미 경고받았다는 걸 알아야 실제로 잠글 수 있다(무고자에게는
-      // 이 값이 그냥 무시되므로 대칭적으로 기록해도 안전하다).
-      if (data.mode === PRESSURE_MODE_LABEL) {
-        setWarnedCharacters((prev) => new Set(prev).add(characterId));
-      }
+      // Phase 39 — 서버가 이미 계산해서 내려준 결정론적 인내심 수치를 그대로 저장한다.
+      setPatienceLevels((prev) => ({ ...prev, [characterId]: data.patienceLevel }));
 
       if (data.locked) {
         setLockedCharacters((prev) => new Set(prev).add(characterId));
@@ -594,29 +586,6 @@ export default function GameApp() {
   const activeCharacter = characters.find((c) => c.characterId === activeCharacterId);
   const activeLocked = activeCharacter ? lockedCharacters.has(activeCharacter.characterId) : false;
 
-  /**
-   * 인내심 게이지(0~5) — Phase 35: 실전 리뷰에서 "⚠️ 배지 하나로는 지금 얼마나
-   * 몰아붙여도 되는지 감이 안 온다"는 지적을 받아, 대화 전체를 훑어 오르내리는
-   * 연속값으로 바꿨다. "동요" 응답이 나오면 +1, 순순히 "답변"하면 -1, "거짓말유지"
-   * 등 그 외는 유지 — 몰아붙이면 쌓이고, 잠깐 물러서면 가라앉는 식이다.
-   * 실제 잠금 여부는 여전히 서버가 결정론적으로 판단한다(진범 하드게이트/무고자
-   * 판정 콜, interrogate/route.ts) — 이 게이지는 그 판단을 미리 정확히 알려주는
-   * 것이 아니라 "지금 분위기가 얼마나 팽팽한지"를 근사해서 보여주는 화면 표시용
-   * 지표다. 실제로 잠기면(lockedCharacters) 그때 게이지도 가득 찬 것으로 표시된다.
-   */
-  function computePressureLevel(characterId: string): number {
-    if (lockedCharacters.has(characterId)) return PRESSURE_LEVEL_MAX;
-    const history = conversations[characterId];
-    if (!history || history.length === 0) return 0;
-    let level = 0;
-    for (const msg of history) {
-      if (msg.role !== "assistant") continue;
-      if (msg.mode === PRESSURE_MODE_LABEL) level = Math.min(PRESSURE_LEVEL_MAX - 1, level + 1);
-      else if (msg.mode === "답변") level = Math.max(0, level - 1);
-    }
-    return level;
-  }
-
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-6 xl:max-w-7xl">
       <header className="flex items-center justify-between">
@@ -663,8 +632,10 @@ export default function GameApp() {
         <div className="flex flex-col gap-3">
           <div className="flex gap-2">
             {characters.map((c) => {
-              const level = computePressureLevel(c.characterId);
               const isLocked = lockedCharacters.has(c.characterId);
+              // Phase 39 — 서버가 매 응답마다 내려주는 결정론적 수치를 그대로 쓴다.
+              // 잠긴 캐릭터는 마지막 응답에서 이미 최대치가 왔겠지만, 방어적으로 한 번 더 고정한다.
+              const level = isLocked ? PATIENCE_MAX : (patienceLevels[c.characterId] ?? 0);
               return (
                 <button
                   key={c.characterId}
@@ -672,7 +643,7 @@ export default function GameApp() {
                   title={
                     isLocked
                       ? "더 이상 심문에 응하지 않습니다"
-                      : `인내심 ${level}/${PRESSURE_LEVEL_MAX} — 몰아붙일수록 차오르고, 순순히 답하면 가라앉습니다`
+                      : `인내심 ${level}/${PATIENCE_MAX} — 관련 키워드를 언급하거나 같은 질문을 반복하면 차오릅니다`
                   }
                   className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
                     activeCharacterId === c.characterId
@@ -685,7 +656,7 @@ export default function GameApp() {
                     {isLocked && <span>🔒</span>}
                   </div>
                   <div className="mt-1.5 flex justify-center gap-0.5" aria-hidden="true">
-                    {Array.from({ length: PRESSURE_LEVEL_MAX }, (_, i) => (
+                    {Array.from({ length: PATIENCE_MAX }, (_, i) => (
                       <span
                         key={i}
                         className={`h-1.5 w-3 rounded-sm transition-colors ${pressureSegmentColor(level, i, isLocked)}`}

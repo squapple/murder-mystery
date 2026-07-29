@@ -6,7 +6,6 @@ import type { CharacterId } from "./game-data/types";
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
-  mode?: string;
 }
 
 export interface PlayerCharacterView {

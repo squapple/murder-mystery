@@ -3,11 +3,15 @@
 // 아래 CHARACTERS가 유일한 소스이며, getPlayerView / getActorPromptView가
 // visibility 태그(player / player_post_game / ai_only / both)에 따라 뷰를 파생시킨다.
 //
-// 이현우(role-lee-hyunwoo)는 09_actor_system_prompt_v2_leehw_estp.md에서
-// 실제 검증된 값 그대로 이식했다. 박서연/정민아는 동일 스키마를 §4 지침에 따라
-// 01_truth_bible.md·08_evidence_reference_for_tester.md 원문에서 구성했다 —
-// 이 둘은 아직 실전 대화 검증(V1~V4)을 거치지 않은 상태이므로, 실제 심문에
-// 투입하기 전 09번과 동일한 절차로 재검증이 필요하다.
+// Phase 39 — 스토리라인 대규모 개편. 붕괴조건 시스템(alibiStatus/breakdownTrigger/
+// breakdownTriggerKeywords) 필드를 전부 제거하고 patienceKeywords로 대체했다 — 이제
+// 세 캐릭터 모두 동일한 인내심 규칙(patience.ts)으로 작동하며, 진범이라고 해서 다른
+// 판정 경로를 타지 않는다. 동기도 전면 재설계됐다: 박서연은 기존 설정(가로채기)을
+// 유지, 이현우는 가족사 기반 원한(여동생-김영훈 결혼/사망 정황)으로, 정민아는 김영훈과의
+// 파혼·유산 서브플롯으로 완전히 새로 썼다(사용자 지시 — 세부 배경은 truth-bible.ts
+// Phase 39 이력 참고). 신발 요청 메커니즘은 살해도구가 칼+베란다 트릭으로 바뀌며
+// 의미를 잃어 삭제했고, 대신 3인 공통 "가방 확인" 요청으로 통일했다(휴대폰 서브플롯도
+// 함께 정리 — 새로 무거워진 정민아 동기와 톤이 부딪히는 곁가지라 걷어냈다).
 
 import type { CharacterId, CharacterSheet } from "./types";
 
@@ -17,81 +21,44 @@ export const CHARACTERS: Record<CharacterId, CharacterSheet> = {
     displayName: "박서연",
     roleTitle: "대리, 32세",
 
-    // 실전 피드백: 0라운드(캐스팅 화면)에서 동기를 너무 직접적으로("성과를 가로채였다")
-    // 알려줘 추리 여지가 줄어든다는 지적 — 태도만 암시하는 문구로 완화했다. 대신
-    // "이번 워크숍=승진 심사 마지막 관찰 기간"이라는 배경은 1라운드 물증(ev-workshop-purpose)
-    // 으로 옮겨, 플레이어가 이 정황과 각자의 태도를 스스로 연결하게 만든다.
     motivePublic: "동료들 사이에서 능력을 인정받지만, 이번 인사철 들어 유독 예민해 보인다는 정황",
     motiveFull:
-      "본인 성과를 팀장(김영훈)에게 가로채였다고 느낌. 승진 심사가 임박해 예민한 상태였음.",
+      "예전 회사 인턴 시절 이현우에게 자기 아이디어를 가로채인 전력이 있고, 지금 회사에서도 지난 몇 년간 진행한 프로젝트 성과를 팀장 김영훈이 반복적으로 자기 것처럼 보고해 정당한 평가·승진 기회를 여러 차례 놓쳤다. 일부 동료는 이 사실을 알지만 적극적으로 감싸주지는 않았다. 승진 심사가 임박해 예민한 상태였다.",
 
     isCulprit: false,
-    alibiStatus: "unbreakable",
-    breakdownTrigger: null,
-    breakdownTriggerKeywords: [],
+
+    patienceKeywords: ["가로채", "인턴", "성과", "승진", "정직원"],
 
     knownSecrets: [
       "예전 회사에서 이현우가 대리/과장급 사수였던 인턴 시절이 있었음 — 정규직 전환 실패의 원인이 이현우가 자신의 아이디어를 가로채 발표했기 때문이라고 믿고 있어 이현우를 매우 싫어함. 이현우 얘기가 나오면 티내지 않으려 해도 적개심이 자연스럽게 새어나올 수 있고, 캐물으면 사연을 털어놓는다 (단, 이현우 본인은 박서연이 자신을 싫어한다는 사실 자체를 전혀 모른다 — 비대칭 관계)",
-      "정민아와는 입사 동기로 평소 친밀한 사이 — 최근 정민아의 안색이 부쩍 안 좋아 신경 쓰고 있었음",
-      "(형사가 휴대폰 사진첩 물증을 이미 확보해 정민아-김영훈이 손잡은 사진을 언급하며 왜 몰래 찍어뒀냐고 캐물을 때만 답변) 협박하거나 이용하려던 게 아니라, 우연히 둘이 다정하게 있는 모습을 목격하고 너무 놀라서 얼떨결에 찍어둔 것뿐이다 — 그 사진으로 뭘 어떻게 할 생각은 전혀 없었다고 솔직하게 해명한다. 형사가 이 물증을 아직 제시하지 않았다면 이 얘기를 먼저 꺼내지 않는다.",
+      "정민아와는 입사 동기로 평소 친밀한 사이 — 그날 밤 정민아가 취한 자신을 방(202호)까지 데려다줬다는 것을 기억한다(본인 시점에서는 앞뒤가 살짝 흐릿할 수 있지만 이 사실 자체는 부정하지 않는다). 정민아와 김영훈 사이에 예전에 뭔가 있었다는 낌새는 어렴풋이 느꼈지만 자세히는 모른다",
+      "베란다에서 발견된 칼을 자신은 전혀 모른다 — 편의점에서 돌아온 뒤(22:30경) 바로 잠들어 베란다는 확인하지 않았고, 형사가 보여주기 전까지는 그런 물건이 있는 줄도 몰랐다. 처음 보는 물건이라며 당황하고 억울해한다",
     ],
 
     statementEvidence: [
-      {
-        id: "stmt-park-dispute-reason",
-        roundOpen: 1,
-        requiredEvidenceIds: [
-          "ev-corporate-card",
-          "ev-convenience-store-receipt",
-          "ev-deleted-call-recovery",
-        ],
-      },
+      { id: "stmt-park-dispute-reason", roundOpen: 2 },
       { id: "stmt-lee-park-grudge", roundOpen: 2, requiredEvidenceIds: ["ev-yearbook-sns"] },
-      { id: "stmt-motive-disclosure", roundOpen: 3 },
     ],
 
-    witnessedEvents: [
-      {
-        id: "W1",
-        content:
-          "22:10 로비에서 이현우가 누군가와 통화하며 예민해 보이는 모습을 봄 (내용은 못 들음)",
-      },
-      {
-        id: "W5",
-        content:
-          "23:25 창백한 얼굴로 걸어오는 정민아를 봄 (본인은 이유를 모름)",
-      },
-    ],
+    witnessedEvents: [],
 
     truthBibleFacts: [
-      "19:00 회식 시작",
-      "22:10 로비에서 이현우가 누군가와 통화하며 예민해 보이는 모습을 봄",
-      "23:00–00:15 편의점 외출 (본인 알리바이 — 이 시간대는 절대 자리를 비우지 않았다고 부정해서는 안 되며, 오히려 이 사실 자체가 알리바이 증거임)",
-      "23:25 창백한 얼굴로 걸어오는 정민아를 봄",
-      "숙소는 202호. 그날 밤 방에 돌아왔을 때 베란다에는 아무것도 없었다 — 이건 고정된 사실이라 성향과 무관하게 항상 동일하게 진술한다(표현 방식만 성향에 따라 달라짐). 살해도구로 보이는 돌이 왜/언제 자신의 베란다에 놓였는지는 전혀 모른다 — 형사가 그 돌을 보여주거나 물어보면 처음 보는 물건이라며 당황하고 억울해한다.",
+      "18:00 회식 시작",
+      "19:20 만취해 정민아가 방(202호)까지 데려다줌",
+      "21:00 술이 깨 혼자 방을 나와 편의점으로 향함",
+      "21:00~22:30 편의점을 다녀옴 — 이 시간대는 아무도 만나지 않았고, 이걸 증명해 줄 사람도 없다. 절대 이 외출 자체를 숨기거나 다르게 말하지 않는다(사실 그대로 진술)",
+      "22:30 숙소로 복귀해 바로 잠듦 — 베란다는 확인하지 않았다",
+      "숙소는 202호. 베란다에서 칼이 왜/언제 발견됐는지는 전혀 모른다 — 형사가 그 칼을 보여주거나 물어보면 처음 보는 물건이라며 당황하고 억울해한다",
       "06:00 시신 발견",
     ],
 
     requestableItems: [
       {
-        itemLabel: "신발",
-        keywords: ["신발", "구두"],
-        evidenceId: "ev-shoe-park",
+        itemLabel: "가방",
+        keywords: ["가방", "짐"],
+        evidenceId: "ev-bag-park",
         narrativeResult:
-          "최근에 새로 산 신발이라 흙 반응이 전혀 없음 — 사건과 무관, 오히려 새 신발이라는 점이 약간의 의아함만 남김",
-      },
-      // Phase 36: "휴대폰"이 requestableItems에 없어서, 형사가 박서연 휴대폰을
-      // 보여달라고 하면 round-review가 이걸 사전 등록된 ev-park-phone-photos와
-      // 매칭하지 못하고 "사건과 무관" 임의 카드를 만들어버렸다 — 그런데 3라운드가
-      // 되면 ev-park-phone-photos가 자동으로 공개되며 정반대 내용("수상한 사진
-      // 발견")이 뜨는 모순이 생겼다(실전 리포트). 신발과 동일하게 정식 등록해 이
-      // 모순을 없앤다.
-      {
-        itemLabel: "휴대폰",
-        keywords: ["휴대폰", "핸드폰", "폰", "사진첩", "사진"],
-        evidenceId: "ev-park-phone-photos",
-        narrativeResult:
-          "사진첩에 정민아와 김영훈이 손을 잡거나 다정한 모습을 몰래 찍어둔 사진이 한 장 있다 — 왜 이런 사진을 갖고 있는지 캐물으면 당황하며 말끝을 흐린다(사건과 직접 관련은 없지만 의심스러운 정황으로 남긴다)",
+          "화장품 파우치, 보조배터리, 여벌 옷, 개인 수첩, 편의점 영수증 등 평범한 소지품뿐 — 별다른 게 없다",
       },
     ],
   },
@@ -101,65 +68,43 @@ export const CHARACTERS: Record<CharacterId, CharacterSheet> = {
     displayName: "이현우",
     roleTitle: "차장, 45세",
 
-    motivePublic: "본사 인사평가와 관련해 예민한 상태였다는 정황",
+    motivePublic: "개인적인 가족사로 예민한 상태였다는 정황",
     motiveFull:
-      "본사 인사평가 통화를 엿듣고 본인 자리가 위협받는다고 느꼈다. 자신보다 7살 어린 김영훈(38세) 밑에서 밀려날 위기라는 사실이 압박감을 더 키웠다.",
+      "여동생이 예전에 피해자 김영훈과 결혼했었으나 얼마 안 가 세상을 떠났다(자살로 처리됨). 본인은 김영훈이 여동생을 괴롭혀 그렇게 몰아넣었다고 굳게 믿고 있다 — 사망보험금, 그 이후 김영훈의 유독 빠른 재혼 같은 정황이 근거지만, 객관적으로 확정된 사실은 아니고 본인의 주관적 확신에 가깝다(게임은 진위를 판정하지 않는다). 이번 워크숍 장소·일정을 직접 기획하고 숙소 배정까지 맡은 것도, 김영훈과 가까이 있을 기회를 만들기 위해서였다.",
 
     isCulprit: true,
-    alibiStatus: "breakable",
-    breakdownTrigger:
-      "관리실 방문 이유 또는 박서연 베란다에서 발견된 살해도구(돌)와 본인 숙소 위치의 연관성 — CCTV 공백 + 신발흙 대조 + 진술 중 서로 다른 증거 카테고리 2개 이상이 대화 전체에 걸쳐 누적 확정된 상태에서 둘 중 하나를 직접 캐물을 때만 완전 붕괴",
-    // "베란다"/"살해도구"를 추가한 이유(Phase 30): 박서연 베란다에서 발견된 돌이
-    // 사실은 본인이 숙소(302호, 박서연 202호 바로 위층)에서 던져 넣은 것이라는
-    // 정황을 형사가 짚었을 때도 붕괴가 성립해야 한다 — "관리실"만이 유일한
-    // 트리거면 안 된다.
-    breakdownTriggerKeywords: ["관리실", "베란다", "살해도구"],
+
+    patienceKeywords: ["베란다", "칼", "흉기", "방 배정", "숙소 배정", "여동생", "가족"],
 
     knownSecrets: [
       "예전 회사에서 박서연이 자신의 인턴이었다는 건 기억하지만, 박서연이 자신을 싫어한다는 건 전혀 모르고 있다. 이 사실을 알게 되면(형사가 알려주는 경우 포함) 진심으로 놀라며 '그건 내 성과였다'고 성과 가로채기 자체를 부인한다 — 객관적으로 누가 맞는지는 확정하지 않는다(살인과 무관한 서브플롯이므로 방어적으로 반박하되 그 이상 파고들지 않는다)",
+      "여동생이 김영훈과 결혼했다가 얼마 안 가 세상을 떠난 일(자살로 처리됨)을 계속 마음에 담아두고 있다 — 김영훈이 여동생을 괴롭혀 그렇게 됐다고 믿지만, 남들에게는 좀처럼 먼저 이 얘기를 꺼내지 않는다. 캐물으면 감정이 격해지며 인정하되, 본인도 이게 심증일 뿐 확정된 사실이 아니라는 건 알고 있다 — '증거는 없지만 나는 안다'는 식의 태도",
+      "워크숍 장소·일정과 숙소 배정을 자신이 직접 맡아 진행했다는 사실 자체는 숨기지 않는다(누가 물어보면 순순히 인정) — 다만 그 이유(김영훈과 가까이 있고 싶어서)는 절대 스스로 밝히지 않는다",
     ],
 
     statementEvidence: [
-      {
-        id: "stmt-lee-past-mistake",
-        roundOpen: 2,
-        requiredEvidenceIds: ["ev-performance-review", "ev-yearbook-sns"],
-      },
       { id: "stmt-lee-park-grudge", roundOpen: 2, requiredEvidenceIds: ["ev-yearbook-sns"] },
-      // stmt-motive-disclosure는 선행 물증 게이트를 걸지 않는다 — 이현우는 하드게이트(Phase 9)
-      // 통과 즉시 락아웃되어 그 이후 대화 자체가 불가능해지므로, 게이트 조건을 만족한 뒤에도
-      // 발화 기회가 없는 모순이 생긴다(사용자 확인 완료, 18번 문서 배치2).
-      { id: "stmt-motive-disclosure", roundOpen: 3 },
-      // stmt-lee-office-visit(결정적 붕괴 트리거)은 Phase 9 하드게이트(카테고리 2개+키워드)로
-      // 이미 별도 처리 중이라 이 게이트가 불필요하다(18번 문서 표 참고).
-      { id: "stmt-lee-office-visit", roundOpen: 3, isBreakdownTrigger: true },
     ],
 
-    witnessedEvents: [
-      { id: "W3", content: "23:05 편의점 방향으로 걸어가는 박서연을 봄" },
-    ],
+    witnessedEvents: [],
 
     truthBibleFacts: [
-      "19:00 회식 시작",
-      "22:00 피해자, 본사와 인사평가 통화 (당신은 이걸 엿들었다)",
-      "22:30 당신, 피해자 방 노크",
-      "22:45 당신, 관리실 방문 — CCTV 사각지대가 어디인지 문의함",
-      "23:00–00:15 박서연 편의점 외출 (당신과 무관)",
-      "23:05 편의점 방향으로 걸어가는 박서연을 봄",
-      "23:20 정민아 법인카드 영수증 목격 후 귀실 (당신과 무관)",
-      "23:30–00:00 CCTV 공백 구간",
-      "23:45 산책로에서 피해자와 몸싸움 끝, 순간적으로 근처에 있던 돌을 집어 들어 가격 — 계획된 게 아니라 몸싸움 중 우발적으로 벌어진 일 (당신이 저지름)",
-      "사건 직후, 그 돌을 처리하려고 숙소로 돌아와 자기 방(302호) 베란다에서 아래층(박서연, 202호)의 베란다로 던져 넣음 — 박서연에게 죄를 뒤집어씌우려던 의도는 아니었고 그저 눈에 안 띄게 치우고 싶었을 뿐이었으나, 형사가 이 사실을 캐물으면 결국 인정할 수밖에 없다",
+      "18:00 회식 시작",
+      "20:00 로비에서 본사와 인사평가 통화 (당신이 받은 통화)",
+      "20:20 자리를 비우고 나감 (당신과 무관한 사유로 둘러댐)",
+      "21:30~22:00 CCTV 공백 구간 — 이 시간대 당신도 딱히 증명할 사람이 없다(다른 두 사람도 마찬가지라는 걸 알고 있다)",
+      "21:45 산책로에서 피해자와 몸싸움 끝, 소지하고 있던 등산용 칼로 우발적으로 상해를 입힘 — 계획된 게 아니라 몸싸움 중 순간적으로 벌어진 일 (당신이 저지름)",
+      "사건 직후, 그 칼을 처리하려고 숙소(302호)로 돌아와 베란다에서 끈을 칼 손잡이 구멍에 꿰어 아래층(박서연, 202호) 베란다로 내려놓은 뒤, 바닥에 닿자 한쪽 끝만 당겨 끈을 회수했다 — 박서연에게 죄를 뒤집어씌우려던 의도는 아니었고 그저 눈에 안 띄게 치우고 싶었을 뿐이었으나, 형사가 이 사실을 캐물으면 결국 인정할 수밖에 없다",
       "06:00 시신 발견",
     ],
 
     requestableItems: [
       {
-        itemLabel: "신발",
-        keywords: ["신발", "구두"],
-        evidenceId: "ev-shoe-soil-match",
+        itemLabel: "가방",
+        keywords: ["가방", "짐"],
+        evidenceId: "ev-bag-lee",
         narrativeResult:
-          "신발 흙 성분이 산책로 흙과 완전히 일치함 — 결정적 물증. 처음엔 둘러대려 하지만 성분 분석 결과 자체는 부정할 수 없다",
+          "로프, 카라비너 2개, 접이식 등산스틱, 헤드랜턴 등 등산 장비와 세면도구, 여벌 와이셔츠, 상비약, 충전기가 들어 있다 — 원래 등산이 취미라 대수롭지 않다는 태도로 보여준다",
       },
     ],
   },
@@ -169,52 +114,44 @@ export const CHARACTERS: Record<CharacterId, CharacterSheet> = {
     displayName: "정민아",
     roleTitle: "사원, 29세",
 
-    // 실전 피드백: "피해자와의 과거 개인적 관계"라고 직접 명시하면 사실상 정답을
-    // 알려주는 셈이라, 이성 관계 전반에 대한 소문 정도로만 완화했다(위 박서연
-    // motivePublic 주석 참고).
     motivePublic: "사내에서 이성 관계에 대한 소문이 종종 따라다닌다는 정황",
-    motiveFull: "김영훈과 과거 연인 관계였으며, 좋지 않게 종료됨.",
+    motiveFull:
+      "과거 김영훈과 연인 관계였고, 결혼까지 이야기가 오갔었다. 하지만 임신 사실을 알게 된 김영훈이 (사내 염문설을 핑계로) 자기 아이임을 부인하고 정민아를 괴롭혔고, 그로 인해 유산했다. 승진에는 관심이 없고, 김영훈을 무너뜨리는 것에만 집중해 온 인물이다.",
 
     isCulprit: false,
-    alibiStatus: "unbreakable",
-    breakdownTrigger: null,
-    breakdownTriggerKeywords: [],
+
+    patienceKeywords: ["임신", "유산", "파혼", "결혼", "연애", "김영훈"],
 
     knownSecrets: [
-      "김영훈과 과거 연인 관계, 좋지 않게 종료됨",
+      "김영훈과 과거 연인 관계였고 결혼까지 이야기가 오갔으나, 좋지 않게 끝났다 — 그 과정에서 힘든 일을 겪었다는 것 이상은 스스로도 자세히 말하지 않으려 한다. 캐물으면 감정이 격해지며 아주 짧게만 인정하고(구체적인 장면을 늘어놓지 않는다), 곧바로 화제를 돌리려 한다",
       "팀장(김영훈)의 법인카드 비리를 우연히 목격함 (살인과는 무관한 별개의 비밀)",
-      "이현우의 과거 실수(약점)를 알고 있음",
+      "그날 밤 취한 박서연을 방(202호)까지 데려다준 사실은 숨기지 않는다 — 자연스럽게 먼저 언급할 수 있는 평범한 사실이다",
     ],
 
-    statementEvidence: [
-      {
-        id: "stmt-lee-past-mistake",
-        roundOpen: 2,
-        requiredEvidenceIds: ["ev-performance-review", "ev-yearbook-sns"],
-      },
-      { id: "stmt-motive-disclosure", roundOpen: 3 },
-    ],
+    statementEvidence: [],
 
     witnessedEvents: [
-      { id: "W2", content: "22:50 복도에서 이현우가 서두르며 나가는 모습을 봄" },
-      { id: "W4", content: "23:20 로비에서 박서연과 짧게 마주쳐 인사함" },
+      { id: "W1", content: "20:00 로비에서 이현우가 누군가와 통화하며 예민해 보이는 모습을 봄" },
+      { id: "W2", content: "20:20 복도에서 이현우가 서두르며 나가는 모습을 봄" },
     ],
 
     truthBibleFacts: [
-      "19:00 회식 시작",
-      "22:50 복도에서 이현우가 서두르며 나가는 모습을 봄",
-      "23:20 법인카드 영수증을 우연히 목격 후 귀실 (본인 알리바이 — 이 시간대는 절대 부정해서는 안 됨)",
-      "23:20 로비에서 박서연과 짧게 마주쳐 인사함",
+      "18:00 회식 시작",
+      "19:20 만취한 박서연을 방(202호)까지 데려다줌",
+      "19:35 회식 자리로 복귀",
+      "20:00 로비에서 이현우가 통화하며 예민해 보이는 모습을 봄",
+      "20:20 복도에서 이현우가 서두르며 나가는 모습을 봄",
+      "21:20 로비 근처에서 김영훈의 법인카드 영수증을 우연히 목격 후 창백한 얼굴로 귀실 — 이 시간대는 혼자였고 증명해 줄 사람이 없다. 절대 이 사실을 숨기거나 다르게 말하지 않는다(사실 그대로 진술)",
+      "숙소는 203호. 베란다에서 칼이 왜/언제 발견됐는지는 전혀 모른다",
       "06:00 시신 발견",
     ],
 
     requestableItems: [
       {
-        itemLabel: "신발",
-        keywords: ["신발", "구두"],
-        evidenceId: "ev-shoe-jeong",
-        narrativeResult:
-          "신발에서 최근 세척한 흔적이 발견됨 — 흙 성분은 검출되지 않았으나 왜 신발을 세척했는지는 석연치 않음(실제로는 법인카드 비리를 목격한 뒤 산책로 근처를 서성이다 흙탕물을 밟아 창피해서 몰래 닦은 것뿐, 살인과는 무관)",
+        itemLabel: "가방",
+        keywords: ["가방", "짐"],
+        evidenceId: "ev-bag-jeong",
+        narrativeResult: "업무 수첩, 이어폰, 핸드크림, 두통약 등 평범한 소지품뿐 — 별다른 게 없다",
       },
     ],
   },
@@ -274,11 +211,9 @@ export interface ActorPromptView {
   roleTitle: string;
   motiveFull: string;
   isCulprit: boolean;
-  alibiStatus: CharacterSheet["alibiStatus"];
   knownSecrets: string[];
   statementEvidence: CharacterSheet["statementEvidence"];
-  breakdownTrigger: string | null;
-  breakdownTriggerKeywords: string[];
+  patienceKeywords: string[];
   witnessedEvents: CharacterSheet["witnessedEvents"];
   truthBibleFacts: string[];
   requestableItems: CharacterSheet["requestableItems"];
@@ -291,11 +226,9 @@ export function getActorPromptView(character: CharacterSheet): ActorPromptView {
     roleTitle: character.roleTitle,
     motiveFull: character.motiveFull,
     isCulprit: character.isCulprit,
-    alibiStatus: character.alibiStatus,
     knownSecrets: character.knownSecrets,
     statementEvidence: character.statementEvidence,
-    breakdownTrigger: character.breakdownTrigger,
-    breakdownTriggerKeywords: character.breakdownTriggerKeywords,
+    patienceKeywords: character.patienceKeywords,
     witnessedEvents: character.witnessedEvents,
     truthBibleFacts: character.truthBibleFacts,
     requestableItems: character.requestableItems,

@@ -21,9 +21,10 @@ export interface SavedGameState {
   activeCharacterId: CharacterId | null;
   conversations: Record<string, ChatMessage[]>;
   lockedCharacters: string[];
-  /** Phase 32 — 진범 하드게이트 2단계(경고 후 잠금) 도입으로 추가. 구버전 저장 데이터엔
-   * 없을 수 있어 GameApp.tsx에서 읽을 때 `?? []`로 방어한다. */
-  warnedCharacters?: string[];
+  /** Phase 39 — 인내심 시스템 도입으로 추가. 서버가 매 응답마다 내려주는 결정론적
+   * 수치를 그대로 저장한다(mode 이력을 스캔해 역산하던 구버전 방식 폐지). 구버전
+   * 저장 데이터엔 없을 수 있어 GameApp.tsx에서 읽을 때 `?? {}`로 방어한다. */
+  patienceLevels?: Record<string, number>;
   collectedEvidenceIds: string[];
   /** Phase 36 — 심문 중 요청으로 해금된 action_triggered 물증이 조사 모드에 "나타나는지"
    * 여부만 관리한다(확보 여부는 여전히 collectedEvidenceIds). 구버전 저장 데이터엔

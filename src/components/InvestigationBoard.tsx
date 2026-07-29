@@ -26,7 +26,7 @@ export default function InvestigationBoard({
   const [selected, setSelected] = useState<EvidenceItem | null>(null);
 
   const roundEvidence = getAvailableEvidenceForRound(round);
-  // action_triggered 증거(예: 신발 요청)는 라운드와 무관하게 심문 중 행동으로만
+  // action_triggered 증거(예: 가방 확인 요청)는 라운드와 무관하게 심문 중 행동으로만
   // 해금된다 — Phase 36: "해금됨"과 "확보됨"을 분리했다. 여기서는 보드에 카드가
   // 나타나는 시점만 결정하고, ✓ 확보는 renderCard의 클릭 로직이 collectedIds로
   // 별도 판단한다.
