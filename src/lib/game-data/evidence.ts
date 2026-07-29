@@ -64,8 +64,6 @@ export interface EvidenceItem {
   name: string;
   revealedFact: string;
   revealTiming: RevealTiming;
-  /** 다른 물증을 먼저 확보해야 조사 모드에서 클릭 가능해지는 경우 (물증→물증 게이트) */
-  requiresEvidenceId?: string;
   /**
    * Phase 38 — "증거 수집" 채점 대상 여부를 명시적으로 표시한다. 라운드만 되면 자동으로
    * 뜨는 물증/진술 증거를 그냥 클릭하는 것만으로 점수가 다 채워지는 문제가 있었다.

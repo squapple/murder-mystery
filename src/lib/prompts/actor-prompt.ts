@@ -30,7 +30,6 @@
 
 import { CHARACTER_LIST, type ActorPromptView } from "../game-data/characters";
 import type { Persona } from "../game-data/types";
-import { getEvidenceById } from "../game-data/evidence";
 import { CASE_OVERVIEW } from "../game-data/truth-bible";
 import { PATIENCE_MAX } from "../patience";
 
@@ -121,37 +120,6 @@ ${revealedEvidenceFacts.length ? revealedEvidenceFacts.map((f) => `- ${f}`).join
 }
 
 /**
- * 선행 물증 게이트 — 화이트리스트가 "형사가 없는 증거를 우기는 것"을 막는 것과
- * 대칭으로, 이건 "형사가 아직 아무 근거도 안 들이밀었는데 액터가 스스로 먼저
- * 실토하는 것"을 막는다. `requiredEvidenceIds`가 있는 진술 화제만 대상으로 한다.
- * 이번 개편과 무관한 기존 인프라 — 그대로 재사용.
- */
-function buildStatementGateSection(
-  character: ActorPromptView,
-  collectedEvidenceIds: Set<string>
-): string {
-  const open: string[] = [];
-  const closed: string[] = [];
-  for (const ref of character.statementEvidence) {
-    if (!ref.requiredEvidenceIds || ref.requiredEvidenceIds.length === 0) continue;
-    const evidence = getEvidenceById(ref.id);
-    if (!evidence) continue;
-    const gateOpen = ref.requiredEvidenceIds.some((id) => collectedEvidenceIds.has(id));
-    if (gateOpen) {
-      open.push(`- ${evidence.name}: ${evidence.detail ?? evidence.revealedFact}`);
-    } else {
-      closed.push(`- ${evidence.name}`);
-    }
-  }
-  if (closed.length === 0) return "";
-  return `\n\n[진술 화제 게이트 — 라운드와 무관하게, 형사가 관련 물증을 실제로 들이밀기 전까지는 아래 화제를 스스로 먼저 밝히지 않는다]
-아직 게이트가 열리지 않은 화제(형사가 관련 물증을 아직 확보하지 못함):
-${closed.join("\n")}
-형사가 이 화제를 직접적으로 캐물어도, 인내심 수치에 맞는 압박 반응으로 흔들리는 모습은 보이되 구체적인 내용 자체는 절대 먼저 밝히지 않는다 — 얼버무리거나 화제를 돌린다. 라운드가 몇 라운드인지는 이 판단과 무관하다.
-${open.length ? `\n게이트가 열린 화제(형사가 관련 물증을 이미 확보함 — 정상적으로 답변 가능):\n${open.join("\n")}` : ""}`;
-}
-
-/**
  * Phase 39 — 인내심 시스템. 진범/무고자 이원 구조(buildBreakdownSection/
  * buildUnbreakableSection)를 통합한 단일 섹션. 서버(patience.ts)가 계산한 결정론적
  * 수치를 받아 그 톤으로만 연기하라고 지시할 뿐, 언제 심문이 끝날지는 이 프롬프트
@@ -164,7 +132,7 @@ function buildPatienceSection(
   revealedEvidenceFacts: string[]
 ): string {
   const culpritClause = character.isCulprit
-    ? `\n\n[진범 전용 — 절대 금지]\n어떤 인내심 수치에서도 "제가 죽였습니다" 류의 명시적 완전 자백을 하지 않는다. 알리바이 공백(그 시간대 증명할 사람이 없다는 것)은 사실대로 인정해도 되지만, 살인 자체는 끝까지 부인한다.`
+    ? `\n\n[진범 전용 — 절대 금지]\n어떤 인내심 수치에서도 "제가 죽였습니다" 류의 명시적 완전 자백을 하지 않는다 — 살인 행위 자체는 끝까지 부인한다(동기·감정·알리바이 공백은 아래 [반응 원칙]대로 인정해도 된다).`
     : "";
   return `${buildEvidenceWhitelistSection(revealedEvidenceFacts)}
 
@@ -173,7 +141,7 @@ function buildPatienceSection(
 수치가 높을수록 더 강하게 압박받고 있다는 뜻이다 — 아래 기준에 맞는 태도로 반응하라:
 - 0~1: 비교적 여유 있게, 방어적이지만 침착하게 응대한다. 질문에는 짧게라도 답한다.
 - 2~3: 눈에 띄게 흔들리기 시작한다 — 말이 짧아지거나 방어적인 태도가 강해지거나 화제를 돌리려 하지만, 그래도 어떤 형태로든 대답은 한다. **이 단계에서 완전히 침묵하거나 대답 자체를 거부하는 건 너무 이르다** — 아직 인내심이 다 차지 않았다는 뜻이니, 흔들리는 모습을 보이더라도 최소한의 대응은 계속한다.
-- 4(최고조): 가장 강하게 동요한다 — 말투가 흐트러지거나 감정이 격해지고, 이 단계에서만 대답을 짧게 얼버무리거나 일부 회피할 수 있다. 그래도 핵심 사실(알리바이 공백, 살인 관련 행적)을 스스로 인정하지는 않는다.
+- 4(최고조): 가장 강하게 동요한다 — 말투가 흐트러지거나 감정이 격해지고, 이 단계에서만 대답을 짧게 얼버무리거나 일부 회피할 수 있다. 알리바이 공백(그 시간대 증명할 사람이 없다는 것) 자체는 이 단계에서도 사실대로 인정한다 — 감춰야 하는 건 살인 행위 자체뿐이다.
 이 수치는 형사의 이번 메시지까지 반영해 서버가 이미 계산을 끝낸 결과다 — 5(최대)에 도달하면 애초에 이 프롬프트가 호출되지 않고 서버가 즉시 대화를 종료시키므로, 당신은 그 단계의 대사를 작성할 일이 없다.${culpritClause}
 
 [반응 원칙]
@@ -200,8 +168,7 @@ export function buildActorSystemPrompt(
   character: ActorPromptView,
   persona: Persona,
   patienceLevel: number,
-  revealedEvidenceFacts: string[] = [],
-  collectedEvidenceIds: Set<string> = new Set()
+  revealedEvidenceFacts: string[] = []
 ): string {
   const witnessedSection = character.witnessedEvents.length
     ? `\n\n[목격한 사실 — 형사가 "다른 사람 본 적 있냐"는 식으로 물으면 자연스럽게 진술 가능]\n${character.witnessedEvents
@@ -210,7 +177,6 @@ export function buildActorSystemPrompt(
     : "";
 
   const behaviorSection = buildPatienceSection(character, patienceLevel, revealedEvidenceFacts);
-  const statementGateSection = buildStatementGateSection(character, collectedEvidenceIds);
 
   return `당신은 머더 미스터리 게임 속 용의자 "${character.displayName}"를 연기하는 AI다. 아래 규칙을 절대적으로 따른다.
 
@@ -233,7 +199,7 @@ ${character.knownSecrets.map((s) => `- ${s}`).join("\n")}
 [진실 성서 — 이 사건에 대해 당신이 알고 있는 사실의 전부. 이 밖의 사실은 절대 지어내지 않는다]
 ${character.truthBibleFacts.map((f) => `- ${f}`).join("\n")}${witnessedSection}
 
-${behaviorSection}${statementGateSection}
+${behaviorSection}
 
 [공통 절대 금지]
 - MBTI 유형명이나 "압박내성 낮음" 같은 메타 표현을 직접 언급하지 말고, 어조·태도로만 성향을 드러내라.`;

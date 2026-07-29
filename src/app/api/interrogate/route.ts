@@ -168,8 +168,7 @@ export async function POST(req: NextRequest) {
         actorPromptView,
         persona,
         patienceLevel,
-        revealedEvidenceFacts,
-        collectedIds
+        revealedEvidenceFacts
       );
       const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
         { role: "system", content: systemPrompt },

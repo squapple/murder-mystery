@@ -46,8 +46,7 @@ export default function InvestigationBoard({
   const physical = available.filter((e) => e.category === "physical");
   const statements = available.filter((e) => e.category === "statement");
 
-  function handleCardClick(e: EvidenceItem, locked: boolean, collected: boolean) {
-    if (locked) return;
+  function handleCardClick(e: EvidenceItem, collected: boolean) {
     if (!collected) onCollect(e.id);
     setSelected(e);
   }
@@ -56,36 +55,25 @@ export default function InvestigationBoard({
    * 확보(✓)되도록 통일했다(이전엔 진술 증거가 라운드 전환 시 자동 확보돼, 카드를
    * 클릭하는 행위 자체가 무의미했다는 지적을 반영). */
   function renderCard(e: EvidenceItem) {
-    const locked = Boolean(e.requiresEvidenceId && !collectedIds.has(e.requiresEvidenceId));
     const collected = collectedIds.has(e.id);
     return (
       <button
         key={e.id}
-        disabled={locked}
-        onClick={() => handleCardClick(e, locked, collected)}
+        onClick={() => handleCardClick(e, collected)}
         className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
           collected
             ? "border-emerald-800 bg-emerald-950/40 text-emerald-300 hover:border-emerald-600"
-            : locked
-              ? "cursor-not-allowed border-neutral-800 bg-neutral-950/40 text-neutral-600"
-              : "border-neutral-700 bg-neutral-950 text-neutral-200 hover:border-blue-600 hover:bg-neutral-900"
+            : "border-neutral-700 bg-neutral-950 text-neutral-200 hover:border-blue-600 hover:bg-neutral-900"
         }`}
       >
         <div className="font-medium">
-          {collected ? "✓ " : locked ? "🔒 " : ""}
+          {collected ? "✓ " : ""}
           {e.name}
         </div>
-        {(collected || !locked) && (
-          <div className="mt-0.5 text-xs text-neutral-400">{e.revealedFact}</div>
-        )}
-        {locked && (
-          <div className="mt-0.5 text-xs text-neutral-600">다른 물증을 먼저 확보하세요</div>
-        )}
-        {!locked && (
-          <div className="mt-1 text-[10px] text-neutral-500">
-            {collected ? "클릭해서 자세히 보기" : "클릭해서 확보하기"}
-          </div>
-        )}
+        <div className="mt-0.5 text-xs text-neutral-400">{e.revealedFact}</div>
+        <div className="mt-1 text-[10px] text-neutral-500">
+          {collected ? "클릭해서 자세히 보기" : "클릭해서 확보하기"}
+        </div>
       </button>
     );
   }
