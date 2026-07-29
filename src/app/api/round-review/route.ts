@@ -136,7 +136,10 @@ export async function POST(req: NextRequest) {
               adHocEvidence.push({
                 id: adHocId,
                 name: `${character.displayName} ${itemName} 확인`,
-                revealedFact: "사건과 무관",
+                // Phase 42: "사건과 무관"이라고 단정해버리면 플레이어가 스스로 판단할
+                // 여지가 없어진다는 지적 — 형사가 확인해본 결과 특별한 게 없었다는
+                // 뉘앙스로만 남긴다(사용자 지시).
+                revealedFact: "특이할 만한 점이 보이지 않는다",
               });
             }
           }
