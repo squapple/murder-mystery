@@ -852,3 +852,12 @@ Phase 58 직후 재검토하다가, 새 "심문 효율"(낭비성 반복 적을�
 
 - **Technical Rationale (하한을 없앤 이유)**:
   - Phase 58의 "최저 5점 보장"은 "낭비가 많아도 너무 가혹하게 깎지 말자"는 관대함의 취지였는데, 방향이 "안 할수록 유리"에서 "할수록 유리"로 뒤집힌 지금 같은 하한을 유지하면 "심문을 아예 안 해도 5점은 그냥 받는다"는 작은 버전의 원래 결함이 다시 생긴다. 방향이 바뀌면 하한의 의미도 같이 재검토해야 한다는 원칙을 이번에 확인했다.
+
+## Phase 60: 교정 신뢰성 재확인(액터 재확인)을 프로덕션에 연결 (Completed)
+
+사용자가 "하네스가 아니라 배포된 곳에서(태블릿으로) 테스트하겠다"고 밝혀, Phase 55에서 하네스 전용으로 검증했던 `verifyCorrectionFidelity`(교정본이 원문 의미를 왜곡했는지 액터 페르소나를 재호출해 확인) 루프를 실제 게임에 연결했다.
+
+- **`src/lib/nim-client.ts`**: `MAX_FIDELITY_RETRIES = 1` 상수 신설 — harness/chat.ts와 `interrogate/route.ts`가 공유한다(harness는 여전히 `/fidelity <n>`으로 런타임에 이 기본값을 덮어쓸 수 있음).
+- **`src/app/api/interrogate/route.ts`**: `verifyAndMaybeRetryCorrection` 헬퍼를 신설해 harness/chat.ts의 `runQualityCheckWithFidelity`와 동일한 로직을 그대로 포팅했다 — 교정으로 텍스트가 실제로 바뀐 경우에만 검증 콜을 하고, 실패 시 반려된 교정 내용을 알려주고 재교정→재검증을 `MAX_FIDELITY_RETRIES`회까지 반복, 끝내 실패하면 원문으로 폴백. 관련성 실패로 인한 재생성 분기에도 동일하게 적용했다. 서버 로그에 `[interrogate] fidelity N/M character=... matches=...` 줄을 추가해, 배포 환경에서도 실제로 검증이 도는지 로그로 확인할 수 있게 했다.
+- **검증**: `npm run lint`/`npx tsc --noEmit`/`npm run build` 통과. 로컬 프리뷰(`next dev`)로 casting→interrogate 실제 호출 2건을 재현 — 둘 다 교정으로 텍스트가 바뀌지 않아 `[interrogate] fidelity` 로그가 찍히지 않는 것까지 확인해(변경 없으면 검증 콜 자체를 생략하는 최적화가 프로덕션에서도 정상 작동), 하네스에서 이미 검증한 로직이 그대로 포팅됐음을 확인했다.
+- **배포**: 커밋 후 `npm run deploy`로 Cloudflare Workers에 반영, 배포된 URL에 직접 요청을 보내 200 응답 확인.

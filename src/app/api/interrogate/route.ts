@@ -14,6 +14,12 @@
 // LLM 콜이 1→2(재시도 시 최대 4~5)로 늘지만, NVIDIA NIM 레이트리밋(40RPM)은 API 키
 // 전체에 걸친 공유 한도이므로 혼자/소수 인원이 플레이하는 상황에서는 문제되지 않는다
 // (여러 팀이 동시에 플레이하는 대규모 시연 상황이라면 이 계수 증가를 다시 검토할 것).
+//
+// Phase 60 — Phase 55에서 harness 전용으로 검증했던 교정 신뢰성 재확인
+// (verifyCorrectionFidelity: 교정본이 원문 의미를 왜곡했는지 액터 페르소나를 다시
+// 불러 확인)을 여기 연결했다. 교정으로 텍스트가 실제로 바뀐 경우에만 추가 콜이
+// 나가므로(변경 없으면 스킵) 평소엔 비용 증가가 크지 않다. 재시도 횟수는
+// nim-client.ts의 MAX_FIDELITY_RETRIES(harness와 공유)로 고정.
 
 import { NextRequest, NextResponse } from "next/server";
 import type OpenAI from "openai";
@@ -21,9 +27,15 @@ import {
   getNimClient,
   NIM_MODEL,
   ACTOR_TEMPERATURE,
+  MAX_FIDELITY_RETRIES,
   getReasoningExtraParams,
 } from "@/lib/nim-client";
-import { runQualityCheck, isFormatValid, SAFETY_FALLBACK_TEXT } from "@/lib/quality-check";
+import {
+  runQualityCheck,
+  isFormatValid,
+  SAFETY_FALLBACK_TEXT,
+  verifyCorrectionFidelity,
+} from "@/lib/quality-check";
 import {
   buildActorSystemPrompt,
   parseActorResponse,
@@ -214,6 +226,55 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // 교정본이 원문 의미를 왜곡했는지, 교정으로 텍스트가 실제로 바뀐 경우에만
+      // 같은 액터 페르소나를 다시 불러 확인한다(Phase 55, harness에서 검증 후
+      // 이번에 프로덕션에 연결). 실패하면 반려된 교정 내용을 알려주고 재교정→재검증을
+      // 최대 MAX_FIDELITY_RETRIES회까지 반복하고, 그래도 실패하면 교정을 포기하고
+      // 원문(sourceText)으로 폴백한다 — harness/chat.ts의 runQualityCheckWithFidelity와
+      // 동일한 로직.
+      async function verifyAndMaybeRetryCorrection(
+        sourceText: string,
+        initialVerdict: Awaited<ReturnType<typeof runQualityCheck>>
+      ): Promise<Awaited<ReturnType<typeof runQualityCheck>>> {
+        let verdict = initialVerdict;
+        if (verdict.finalText.trim() === sourceText.trim()) return verdict;
+
+        for (let attempt = 1; attempt <= MAX_FIDELITY_RETRIES; attempt++) {
+          const fidelity = await verifyCorrectionFidelity(
+            client,
+            NIM_MODEL,
+            systemPrompt,
+            historyMessages,
+            userMessage,
+            sourceText,
+            verdict.finalText,
+            reasoningExtraParams
+          );
+          console.log(
+            `[interrogate] fidelity ${attempt}/${MAX_FIDELITY_RETRIES} character=${characterId} matches=${fidelity.matches} reason=${fidelity.reason}`
+          );
+
+          if (fidelity.matches) return verdict;
+          if (attempt >= MAX_FIDELITY_RETRIES) break;
+
+          const rejected = verdict.finalText;
+          verdict = await runQualityCheck(
+            client,
+            NIM_MODEL,
+            userMessage,
+            sourceText,
+            reasoningExtraParams,
+            rejected
+          );
+          if (verdict.finalText.trim() === sourceText.trim()) return verdict;
+        }
+
+        console.log(
+          `[interrogate] fidelity fallback character=${characterId} — 교정 포기, 원문 사용`
+        );
+        return { ...verdict, finalText: sourceText };
+      }
+
       // 2단계 — 교정+관련성+안전 통합 검수(콜 1개, Phase 53/54). 관련성 실패 시
       // 1회 재생성 후 다시 통합 검수, 안전 실패 시 재생성 없이 고정 폴백으로
       // 대체한다 — harness/chat.ts와 동일한 파이프라인.
@@ -224,6 +285,7 @@ export async function POST(req: NextRequest) {
         rawText,
         reasoningExtraParams
       );
+      verdict = await verifyAndMaybeRetryCorrection(rawText, verdict);
       let responseText = verdict.finalText;
 
       if (!verdict.isRelevant) {
@@ -237,6 +299,7 @@ export async function POST(req: NextRequest) {
           retryText,
           reasoningExtraParams
         );
+        verdict = await verifyAndMaybeRetryCorrection(retryText, verdict);
         responseText = verdict.finalText;
       }
 

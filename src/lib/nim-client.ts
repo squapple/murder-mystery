@@ -74,6 +74,17 @@ export const POLISH_MODEL = process.env.NVIDIA_POLISH_MODEL || NIM_MODEL;
 export const ACTOR_TEMPERATURE = 0.2;
 
 /**
+ * Phase 55 — 교정본이 원문 의미를 왜곡했는지 액터 페르소나를 재호출해 확인하는
+ * 재검증 루프(verifyCorrectionFidelity, quality-check.ts)의 최대 재시도 횟수.
+ * 1회 vs 5회를 실측 비교하기로 했으나, 하네스 테스트에서 재검증 실패 사례
+ * 자체를 거의 못 봐 표본이 부족해 1회로 시작하기로 결정했다(사용자 명시) — 나중에
+ * 실전에서 맞춤법/문법 오류가 계속 나오면 이 값을 올려보는 게 첫 번째 시도할
+ * 대응이다(먼저 시도할 방향으로 기록해둠). interrogate/route.ts와 harness/chat.ts가
+ * 이 상수 하나를 공유한다.
+ */
+export const MAX_FIDELITY_RETRIES = 1;
+
+/**
  * deepseek-v4-flash 기준 검증 결과: thinking 켜고 reasoning_effort=high가 유일하게
  * 안정적이었다 (medium은 두 차례 재현된 실측으로 폐기 — high 55~71초 대비 medium
  * 138~150초). 이 설정은 deepseek 계열 전용이다.

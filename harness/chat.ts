@@ -36,6 +36,7 @@ import {
   getNimClient,
   NIM_MODEL,
   ACTOR_TEMPERATURE,
+  MAX_FIDELITY_RETRIES,
   getReasoningExtraParams,
 } from "../src/lib/nim-client";
 import {
@@ -387,7 +388,9 @@ function createInitialState(): HarnessState {
     // Phase 51 — 사용자 요청으로 후처리를 기본 on으로 바꿨다("항상 켜둔 채 점검").
     qualityCheckEnabled: true,
     // Phase 55 — 1회 vs 5회 실증 비교 실험 전까지는 1회를 기본값으로 둔다.
-    maxFidelityRetries: 1,
+    // nim-client.ts의 MAX_FIDELITY_RETRIES와 공유(프로덕션 기본값과 항상 동일하게
+    // 시작하되, /fidelity 명령어로 하네스에서만 런타임에 조절 가능).
+    maxFidelityRetries: MAX_FIDELITY_RETRIES,
     round: 1,
   };
 }
