@@ -53,7 +53,15 @@ export interface CharacterSheet {
   motiveFull: string; // ai_only — 진실 성서 원문 동기 전문
 
   isCulprit: boolean; // ai_only — 절대 플레이어 뷰에 렌더링 금지
-  knownSecrets: string[]; // ai_only
+  knownSecrets: string[]; // ai_only — 순수 사실만. "언제/어떻게 말할지"는 behaviorRules로 분리
+  /**
+   * Phase 47 — 캐릭터별 행동 규칙(ai_only). 이전에는 `knownSecrets`/`truthBibleFacts`
+   * 문자열 안에 사실과 "형사가 캐물어야만 밝힌다"류 지시가 뒤섞여 있었다 — 어떤 사실엔
+   * 규칙이 붙고 어떤 사실엔 안 붙는 비일관성의 원인이었다(예: 방 번호 유출 버그).
+   * 이제 사실(knownSecrets/truthBibleFacts)과 행동 지침(behaviorRules)을 별도 필드로
+   * 분리해 한쪽만 보고도 "이 사실을 언제/어떻게 말해야 하는지"를 명확히 관리한다.
+   */
+  behaviorRules: string[]; // ai_only
   statementEvidence: StatementEvidenceRef[]; // ai_only
   /**
    * 인내심 시스템(Phase 39) — 이 캐릭터에게 보낸 형사의 메시지가 이 키워드 중 하나라도

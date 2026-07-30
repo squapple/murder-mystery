@@ -63,6 +63,17 @@ export const NIM_MODEL = process.env.NVIDIA_NIM_MODEL || "google/diffusiongemma-
 export const POLISH_MODEL = process.env.NVIDIA_POLISH_MODEL || NIM_MODEL;
 
 /**
+ * Phase 51 — 지금까지 액터 콜은 temperature=1(다양성 우선)로 고정돼 있었다. 사용자가
+ * 상용 LLM 서비스들의 "전처리(품질 지침 프롬프트) + 낮은 temperature + 후처리 4종"
+ * 조합을 실험해보자고 제안하면서 0.2로 낮춰보기로 했다 — 더 결정론적이고 일관된
+ * 문장을 기대하되, 페르소나별 표현 다양성이 과도하게 죽지는 않는지 하네스로
+ * 검증하면서 조정한다(문제가 있으면 1로 되돌릴 수 있도록 값을 한 곳에 모아뒀다).
+ * interrogate/route.ts와 harness/chat.ts가 이 상수 하나를 공유해 항상 같은 설정으로
+ * 테스트·배포되게 한다.
+ */
+export const ACTOR_TEMPERATURE = 0.2;
+
+/**
  * deepseek-v4-flash 기준 검증 결과: thinking 켜고 reasoning_effort=high가 유일하게
  * 안정적이었다 (medium은 두 차례 재현된 실측으로 폐기 — high 55~71초 대비 medium
  * 138~150초). 이 설정은 deepseek 계열 전용이다.

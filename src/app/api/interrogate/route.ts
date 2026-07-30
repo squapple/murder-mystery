@@ -8,17 +8,22 @@
 // LLM을 부르기 **전에** 서버가 결정론적으로 계산한다 — 최대치에 도달하면 LLM 호출
 // 자체를 생략하고 고정 문구를 즉시 반환하고, 그 미만이면 계산된 수치를 프롬프트에
 // 주입해 그 톤으로만 연기하게 한다(모델은 언제 잠글지 절대 판단하지 않는다).
+//
+// Phase 54 — harness/(Phase 44~53)에서 검증한 생성 전 품질 지침 + temperature=0.2 +
+// 통합 후처리(교정/관련성/안전, quality-check.ts)를 실제 배포 경로에 연결했다. 턴당
+// LLM 콜이 1→2(재시도 시 최대 4~5)로 늘지만, NVIDIA NIM 레이트리밋(40RPM)은 API 키
+// 전체에 걸친 공유 한도이므로 혼자/소수 인원이 플레이하는 상황에서는 문제되지 않는다
+// (여러 팀이 동시에 플레이하는 대규모 시연 상황이라면 이 계수 증가를 다시 검토할 것).
 
 import { NextRequest, NextResponse } from "next/server";
 import type OpenAI from "openai";
 import {
   getNimClient,
   NIM_MODEL,
+  ACTOR_TEMPERATURE,
   getReasoningExtraParams,
 } from "@/lib/nim-client";
-// Phase 33에서 쓰던 polishText/POLISH_MODEL 연동은 Phase 35에서 되돌렸다 —
-// 자세한 이유는 아래 responseText 계산부 주석 참고. import만 빼고
-// text-polish.ts/POLISH_MODEL 자체는 나중을 위해 남겨뒀다.
+import { runQualityCheck, isFormatValid, SAFETY_FALLBACK_TEXT } from "@/lib/quality-check";
 import {
   buildActorSystemPrompt,
   parseActorResponse,
@@ -170,40 +175,80 @@ export async function POST(req: NextRequest) {
         patienceLevel,
         revealedEvidenceFacts
       );
-      const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-        { role: "system", content: systemPrompt },
-        ...historyMessages,
-        { role: "user", content: userMessage },
-      ];
 
-      const completion = await client.chat.completions.create({
-        model: NIM_MODEL,
-        max_tokens: 2048,
-        temperature: 1,
-        top_p: 0.95,
-        messages,
-        ...reasoningExtraParams,
-      } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming &
-        typeof reasoningExtraParams);
+      // Phase 54 — harness/chat.ts와 동일한 재생성 패턴: 재시도 시에도 같은
+      // systemPrompt/history를 쓰되, 실패 사유를 짚어주는 지시문 한 줄만 덧붙인다.
+      async function generateOnce(extraReminder?: string): Promise<string> {
+        const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+          {
+            role: "system",
+            content: extraReminder ? `${systemPrompt}\n\n${extraReminder}` : systemPrompt,
+          },
+          ...historyMessages,
+          { role: "user", content: userMessage },
+        ];
 
-      const rawText = completion.choices[0]?.message?.content ?? "";
-      const parsed = parseActorResponse(rawText);
+        const completion = await client.chat.completions.create({
+          model: NIM_MODEL,
+          max_tokens: 2048,
+          temperature: ACTOR_TEMPERATURE,
+          top_p: 0.95,
+          messages,
+          ...reasoningExtraParams,
+        } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming &
+          typeof reasoningExtraParams);
+
+        const rawText = completion.choices[0]?.message?.content ?? "";
+        return parseActorResponse(rawText).text;
+      }
+
+      let rawText = await generateOnce();
+
+      // 1단계 — 포맷 검증(LLM 콜 없는 순수 로직). 비었거나 브라켓 잔재가 남아있으면
+      // 1회 재생성한다.
+      if (!isFormatValid(rawText)) {
+        rawText = await generateOnce(
+          "[재생성 지시] 방금 답변이 비어있거나 형식이 깨졌다. 대괄호나 라벨 없이, 캐릭터의 실제 대사만 자연스러운 문장으로 다시 답하라."
+        );
+      }
+
+      // 2단계 — 교정+관련성+안전 통합 검수(콜 1개, Phase 53/54). 관련성 실패 시
+      // 1회 재생성 후 다시 통합 검수, 안전 실패 시 재생성 없이 고정 폴백으로
+      // 대체한다 — harness/chat.ts와 동일한 파이프라인.
+      let verdict = await runQualityCheck(
+        client,
+        NIM_MODEL,
+        userMessage,
+        rawText,
+        reasoningExtraParams
+      );
+      let responseText = verdict.finalText;
+
+      if (!verdict.isRelevant) {
+        const retryText = await generateOnce(
+          "[재생성 지시] 방금 답변이 형사의 질문 의도를 놓쳤다. 형사가 실제로 무엇을 물었는지 다시 확인하고, 그 질문에 직접 대응하는 대사로 다시 답하라."
+        );
+        verdict = await runQualityCheck(
+          client,
+          NIM_MODEL,
+          userMessage,
+          retryText,
+          reasoningExtraParams
+        );
+        responseText = verdict.finalText;
+      }
+
+      if (!verdict.isSafe) {
+        responseText = SAFETY_FALLBACK_TEXT;
+      }
+
       const elapsedMs = Date.now() - startedAt;
-
-      // Phase 33에서 오타/중복 음절 후처리(polishText) 콜을 붙였었으나, Phase 35에서
-      // 되돌렸다 — 한 턴만 떼어서 교정하는 방식으로는 맥락(호칭·존비속 관계) 오류까지는
-      // 못 잡고, 오히려 손을 대다가 새로 만들어내는 사례도 있었다(사용자 관찰). 전체
-      // 대화 맥락을 함께 보는 교정 방식은 지연시간이 크게 늘어날 것으로 예상돼 비용
-      // 대비 효율이 애매하다고 판단, 대신 더 나은 모델로 교체하는 방향을 나중에 다시
-      // 검토하기로 하고 일단 되돌린다. text-polish.ts와 POLISH_MODEL(nim-client.ts)은
-      // 그 재검토를 위해 그대로 남겨뒀다.
-      const responseText = parsed.text;
 
       // 소지품 요청(가방 등) 판정은 여기서 하지 않는다 — 라운드 종료 시
       // /api/round-review가 그 라운드 대화 전체를 한 번에 검토해 일괄 처리한다.
 
       console.log(
-        `[interrogate] model=${NIM_MODEL} character=${characterId} persona=${persona.mbtiType} round=${round} elapsedMs=${elapsedMs} patienceLevel=${patienceLevel}/${PATIENCE_MAX} locked=false`
+        `[interrogate] model=${NIM_MODEL} character=${characterId} persona=${persona.mbtiType} round=${round} elapsedMs=${elapsedMs} patienceLevel=${patienceLevel}/${PATIENCE_MAX} locked=false relevance=${verdict.isRelevant} safety=${verdict.isSafe}`
       );
 
       controller.enqueue(

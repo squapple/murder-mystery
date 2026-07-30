@@ -43,6 +43,15 @@ const STRATEGY_HINT: Record<Persona["interrogationStrategy"], string> = {
  * 사례가 관측됐다 — 강원도 산속 연수원에서 1박 2일 워크숍 중인데 "집"이 존재할 수 없다.
  * 규칙을 직접 강제("항상 숙소라고 답하라")하는 대신, 배경 자체를 구체적으로 인지시켜
  * 모델이 스스로 맥락에 맞게 판단하도록 했다.
+ *
+ * Phase 44에서는 "지금이 사건 다음날이고, 당신도 이미 사망 사실을 안다"는 걸 별도의
+ * 2인칭 지시문(`INTERROGATION_CONTEXT`)으로 여기 주입했었는데, 하네스 재현 테스트에서
+ * 이 방식이 실제 게임 프롬프트로는 잘 안 먹혔다(여전히 "그게 무슨 소리예요?" 하며
+ * 처음 듣는 것처럼 반응). Phase 45에서 사용자 제안으로 방식을 바꿨다 — 별도의
+ * "이미 알고 있다"는 메타 지시문 대신, `truthBibleFacts`(characters.ts)의 타임라인
+ * 끝에 "08:00 경찰 출동", "13:00 심문 시작"을 다른 사실들과 똑같은 형식으로 그냥
+ * 추가했다. 이제 이 섹션은 순수 배경 설명만 담당하고, "지금 이 상황"은 각 캐릭터의
+ * 진실 성서 마지막 항목들이 자연스럽게 전달한다.
  */
 function buildCaseSettingSection(): string {
   return `[사건 배경 — 이 장소·상황을 벗어나는 답변(예: "집에 갔다")을 하지 않는다]
@@ -59,6 +68,36 @@ function buildOtherSuspectsSection(character: ActorPromptView): string {
   const others = CHARACTER_LIST.filter((c) => c.characterId !== character.characterId);
   return `[함께 심문받는 다른 용의자들 — 이들을 언급할 때는 반드시 아래 이름·직책을 정확히 사용한다]
 ${others.map((c) => `- ${c.displayName} (${c.roleTitle})`).join("\n")}`;
+}
+
+/**
+ * Phase 44 — 하네스 테스트에서 박서연이 묻지도 않았는데 "202호 방 들어왔거든요"처럼
+ * 스스로 방 번호를 말하는 사례가 관측됐다. characters.ts의 knownSecrets/truthBibleFacts는
+ * 방 번호를 그대로("방(202호)") 사실로 갖고 있는데, 다른 비밀들과 달리 이 사실만은
+ * "형사가 캐묻기 전까지 스스로 밝히지 않는다"는 게이팅 지시가 붙어있지 않았다 —
+ * FAIR_PLAY_PRINCIPLES 문서(진범을 특정하는 결정적 연결고리는 대사로 직접 노출되지
+ * 않는다)의 의도가 실제 프롬프트에는 반영이 안 된 상태였던 것. 캐릭터별로 매번
+ * 반복해서 적는 대신, 3인 공통 규칙으로 한 번만 주입한다.
+ */
+function buildRoomNumberDisciplineSection(): string {
+  return `[숙소(방) 번호 언급 규칙 — 전원 공통]
+자신이나 다른 사람의 방·숙소 얘기를 자연스럽게 하는 것 자체는 상관없다(예: "방까지 데려다줬다", "제 방으로 돌아갔다"). 다만 형사가 "몇 호였나요", "방 위치가 어땠나요"처럼 구체적으로 호수나 위치 관계를 캐묻기 전까지는 실제 호수 숫자를 스스로 먼저 말하지 않는다 — "제 방", "그 사람 방", "본인 숙소" 정도로만 말한다. 형사가 직접 호수나 위치 관계를 물으면 숨기지 말고 알고 있는 그대로 솔직하게 답한다.`;
+}
+
+/**
+ * Phase 51 — 사용자가 상용 LLM 서비스들의 "생성 전 품질 지침" 패턴(자연스러운 문법,
+ * 의도 추론, 애매하면 확인, 반복 줄이기, 과신 금지, 안전성)을 실험해보자고 제안했다.
+ * 7개 항목 중 "포맷 유지"는 이미 `[출력 형식]`/`[절대 금지]`에 있어 중복이라 뺐다.
+ * temperature를 낮추는 것과 함께 적용해, 하네스로 효과를 검증한 뒤 유지 여부를
+ * 판단한다.
+ */
+function buildGenerationQualitySection(): string {
+  return `[생성 품질 지침]
+- 오탈자, 조사 오류, 중복 음절 없이 문법적으로 자연스러운 문장으로 답한다.
+- 답하기 전에 형사가 실제로 무엇을 묻는지 의도를 먼저 파악하고, 그 의도에 맞게 답한다.
+- 질문의 의도가 정말 불분명해서 뭘 묻는지 판단이 안 서면, 짐작으로 답을 지어내지 말고 "그게 무슨 말씀이세요?" 식으로 되물어 확인한다(다만 대답하기 싫어서 회피하는 것과는 다르다 — 인내심 규칙에 따른 의도적 회피는 그대로 유지한다).
+- 같은 표현이나 문장 구조를 turn마다 반복하지 않는다.
+- 진실 성서에 명시되지 않았거나 확실하지 않은 것을 단정적으로 말하지 않는다.`;
 }
 
 function buildPersonaTendencySection(persona: Persona): string {
@@ -184,6 +223,10 @@ ${buildCaseSettingSection()}
 
 ${buildOtherSuspectsSection(character)}
 
+${buildRoomNumberDisciplineSection()}
+
+${buildGenerationQualitySection()}
+
 [역할 정보]
 - 이름/나이/직책: ${character.displayName}, ${character.roleTitle}
 - 성향(페르소나): ${persona.mbtiType} — 심문전략: ${persona.interrogationStrategy}(${STRATEGY_HINT[persona.interrogationStrategy]}), 압박내성: ${persona.pressureTolerance}, 코너 몰렸을 때: ${persona.corneredReaction}
@@ -198,6 +241,9 @@ ${character.knownSecrets.map((s) => `- ${s}`).join("\n")}
 
 [진실 성서 — 이 사건에 대해 당신이 알고 있는 사실의 전부. 이 밖의 사실은 절대 지어내지 않는다]
 ${character.truthBibleFacts.map((f) => `- ${f}`).join("\n")}${witnessedSection}
+
+[캐릭터별 행동 규칙 — 위 사실들을 언제·어떻게 말할지에 대한 지침]
+${character.behaviorRules.map((r) => `- ${r}`).join("\n")}
 
 ${behaviorSection}
 
