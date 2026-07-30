@@ -12,6 +12,12 @@
 // 곧바로 부딪혔다(Phase 52에서 실제로 429 재현). 세 판정을 콜 1개로 병합
 // (quality-check.ts)해 턴당 필수 콜을 2개(생성+통합검수)로 줄였다.
 //
+// Phase 55(실험) — 관련성 판정이 자기가 방금 만든 교정본을 같은 호출 안에서
+// 스스로 평가하는 구조적 약점이 지적돼, 교정으로 텍스트가 실제로 바뀐 경우에만
+// "같은 액터 페르소나"를 다시 불러 원문과 의미가 같은지 확인하는 단계
+// (verifyCorrectionFidelity)를 추가했다. 재검증 횟수(1회 vs 5회)를 실험으로
+// 비교하기 위해 /fidelity 명령어로 런타임에 조절 가능하게 했다.
+//
 // 실행: npm run harness  (내부적으로 tsx --env-file=.env.local harness/chat.ts)
 //
 // 명령어:
@@ -21,6 +27,7 @@
 //   /persona <MBTI>    페르소나 교체 (ISTJ/ISFP/INTP/INFJ/ESTP/ESFJ/ENTJ/ENFP)
 //   /quality on|off    교정+관련성+안전 통합 검수(quality-check.ts) 토글 (기본 on) —
 //                      관련성 "아니오" 시 1회 재생성, 안전 "아니오" 시 폴백 문구로 대체
+//   /fidelity <n>      교정본 의미 보존 재검증 최대 재시도 횟수 설정 (기본 1)
 //   /exit              종료
 
 import { createInterface } from "node:readline/promises";
@@ -39,7 +46,13 @@ import {
 import { CHARACTERS, getActorPromptView } from "../src/lib/game-data/characters";
 import { PERSONAS } from "../src/lib/game-data/personas";
 import { computePatienceLevel, PATIENCE_MAX } from "../src/lib/patience";
-import { runQualityCheck, isFormatValid, SAFETY_FALLBACK_TEXT } from "../src/lib/quality-check";
+import {
+  runQualityCheck,
+  isFormatValid,
+  SAFETY_FALLBACK_TEXT,
+  verifyCorrectionFidelity,
+  type QualityCheckResult,
+} from "../src/lib/quality-check";
 import type { CharacterId, Persona } from "../src/lib/game-data/types";
 
 const DEFAULT_CHARACTER_ID: CharacterId = "role-park-seoyeon";
@@ -66,14 +79,16 @@ interface HarnessState {
   persona: Persona;
   history: ConversationTurn[];
   qualityCheckEnabled: boolean;
+  maxFidelityRetries: number;
+  round: number;
 }
 
 function printBanner(state: HarnessState) {
   console.log(
-    `\n=== 대화 테스트 하네스 === (character=${CHARACTERS[state.characterId].displayName}, persona=${state.personaKey}, temperature=${ACTOR_TEMPERATURE}, quality=${state.qualityCheckEnabled ? "on" : "off"})`
+    `\n=== 대화 테스트 하네스 === (character=${CHARACTERS[state.characterId].displayName}, persona=${state.personaKey}, temperature=${ACTOR_TEMPERATURE}, quality=${state.qualityCheckEnabled ? "on" : "off"}, fidelityRetries=${state.maxFidelityRetries}, round=${state.round})`
   );
   console.log(
-    "명령어: /help /reset /character <park|lee|jeong> /persona <MBTI> /quality on|off /exit\n"
+    "명령어: /help /reset /character <park|lee|jeong> /persona <MBTI> /quality on|off /fidelity <n> /round <1|2|3> /exit\n"
   );
 }
 
@@ -85,8 +100,15 @@ function printHelp() {
 /persona <MBTI>    페르소나 교체: ${Object.keys(PERSONAS).join(", ")}
 /quality on|off    교정+관련성+안전 통합 검수(quality-check.ts) 토글 (기본 on) —
                    관련성 "아니오" 시 1회 재생성, 안전 "아니오" 시 폴백 문구로 대체
+/fidelity <n>      교정본 의미 보존 재검증(액터 재확인) 최대 재시도 횟수 (기본 1)
+/round <1|2|3>     현재 라운드 설정 (기본 1) — 라운드가 오를 때마다 인내심이 1씩 깎인다
 /exit              종료
 `);
+}
+
+function buildSystemPromptForState(state: HarnessState, patienceLevel: number): string {
+  const character = getActorPromptView(CHARACTERS[state.characterId]);
+  return buildActorSystemPrompt(character, state.persona, patienceLevel, []);
 }
 
 async function generateOnce(
@@ -95,11 +117,10 @@ async function generateOnce(
   patienceLevel: number,
   extraReminder?: string
 ): Promise<string> {
-  const character = getActorPromptView(CHARACTERS[state.characterId]);
   const client = getNimClient();
   const reasoningExtraParams = getReasoningExtraParams(NIM_MODEL);
 
-  let systemPrompt = buildActorSystemPrompt(character, state.persona, patienceLevel, []);
+  let systemPrompt = buildSystemPromptForState(state, patienceLevel);
   if (extraReminder) {
     systemPrompt += `\n\n[재생성 지시 — 방금 답변이 형사의 질문에 제대로 대응하지 못했다고 판단됨]\n${extraReminder}`;
   }
@@ -123,9 +144,84 @@ async function generateOnce(
   return parseActorResponse(rawText).text;
 }
 
+/**
+ * 교정본이 원문과 다를 때만(폴리시 미변경 시 검증 콜 자체를 생략) 같은 액터
+ * 페르소나를 다시 불러 의미 보존 여부를 확인한다(Phase 55 실험). 실패하면
+ * previousRejectedCorrection을 알려주고 재교정→재검증을 최대
+ * state.maxFidelityRetries회까지 반복하고, 그래도 실패하면 원문(source)으로
+ * 폴백한다.
+ */
+async function runQualityCheckWithFidelity(
+  state: HarnessState,
+  userMessage: string,
+  patienceLevel: number,
+  sourceText: string,
+  initialVerdict: QualityCheckResult
+): Promise<{ finalText: string; verdict: QualityCheckResult }> {
+  let verdict = initialVerdict;
+
+  if (verdict.finalText.trim() === sourceText.trim()) {
+    return { finalText: verdict.finalText, verdict };
+  }
+
+  const client = getNimClient();
+  const reasoningExtraParams = getReasoningExtraParams(NIM_MODEL);
+  const systemPrompt = buildSystemPromptForState(state, patienceLevel);
+  const historyMessages: OpenAI.Chat.ChatCompletionMessageParam[] = state.history.map((t) => ({
+    role: t.role,
+    content: t.content,
+  }));
+
+  for (let attempt = 1; attempt <= state.maxFidelityRetries; attempt++) {
+    const fidelity = await verifyCorrectionFidelity(
+      client,
+      NIM_MODEL,
+      systemPrompt,
+      historyMessages,
+      userMessage,
+      sourceText,
+      verdict.finalText,
+      reasoningExtraParams
+    );
+    console.log(
+      `[FIDELITY ${attempt}/${state.maxFidelityRetries}] 일치=${fidelity.matches ? "예" : "아니오"}(${fidelity.reason})`
+    );
+
+    if (fidelity.matches) {
+      return { finalText: verdict.finalText, verdict };
+    }
+
+    if (attempt >= state.maxFidelityRetries) break;
+
+    const rejected = verdict.finalText;
+    verdict = await runQualityCheck(
+      client,
+      NIM_MODEL,
+      userMessage,
+      sourceText,
+      reasoningExtraParams,
+      rejected
+    );
+    console.log(`[FIDELITY RETRY ${attempt + 1}] 재교정: ${verdict.finalText}`);
+
+    if (verdict.finalText.trim() === sourceText.trim()) {
+      // 재교정 결과가 원문과 동일해졌다 — 검증할 변경점이 없으므로 그대로 채택.
+      return { finalText: verdict.finalText, verdict };
+    }
+  }
+
+  console.log("[FIDELITY FALLBACK] 의미 보존 검증 끝내 실패 — 교정 포기, 원문 사용");
+  return { finalText: sourceText, verdict };
+}
+
 async function handleUserMessage(state: HarnessState, userMessage: string) {
   const character = getActorPromptView(CHARACTERS[state.characterId]);
-  const patienceLevel = computePatienceLevel(character.patienceKeywords, state.history, userMessage);
+  const patienceLevel = computePatienceLevel(
+    character.patienceKeywords,
+    state.history,
+    userMessage,
+    state.round
+  );
 
   if (patienceLevel >= PATIENCE_MAX) {
     console.log(`\n[인내심 ${patienceLevel}/${PATIENCE_MAX} — 잠김, LLM 콜 생략]`);
@@ -157,12 +253,16 @@ async function handleUserMessage(state: HarnessState, userMessage: string) {
   // 2단계 — 교정+관련성+안전 통합 검수(콜 1개, Phase 53). 관련성 실패 시 1회
   // 재생성 후 다시 통합 검수, 안전 실패 시 재생성 없이 고정 폴백으로 대체한다
   // (문제 있는 내용을 다시 생성 시도하는 것보다 안전한 문구로 확실히 대체하는
-  // 쪽이 안전 계층의 목적에 맞다는 기존 판단 유지).
+  // 쪽이 안전 계층의 목적에 맞다는 기존 판단 유지). 교정으로 텍스트가 실제로
+  // 바뀐 경우엔 액터 재확인(의미 보존 검증, Phase 55)을 추가로 거친다.
   if (state.qualityCheckEnabled) {
     let verdict = await runQualityCheck(getNimClient(), NIM_MODEL, userMessage, finalText, getReasoningExtraParams(NIM_MODEL));
     console.log(`[QUALITY] 관련성=${verdict.isRelevant ? "예" : "아니오"}(${verdict.relevanceReason}) 안전=${verdict.isSafe ? "예" : "아니오"}(${verdict.safetyReason})`);
     console.log(`[POLISHED] ${verdict.finalText}`);
-    finalText = verdict.finalText;
+
+    const verified = await runQualityCheckWithFidelity(state, userMessage, patienceLevel, rawText, verdict);
+    finalText = verified.finalText;
+    verdict = verified.verdict;
 
     if (!verdict.isRelevant) {
       console.log("[RETRY] 관련성 검수 실패 — 1회 재생성 시도");
@@ -175,7 +275,10 @@ async function handleUserMessage(state: HarnessState, userMessage: string) {
       console.log(`[RETRY RAW] ${retryText}`);
       verdict = await runQualityCheck(getNimClient(), NIM_MODEL, userMessage, retryText, getReasoningExtraParams(NIM_MODEL));
       console.log(`[RETRY QUALITY] 관련성=${verdict.isRelevant ? "예" : "아니오"}(${verdict.relevanceReason}) 안전=${verdict.isSafe ? "예" : "아니오"}(${verdict.safetyReason})`);
-      finalText = verdict.finalText;
+
+      const retryVerified = await runQualityCheckWithFidelity(state, userMessage, patienceLevel, retryText, verdict);
+      finalText = retryVerified.finalText;
+      verdict = retryVerified.verdict;
     }
 
     if (!verdict.isSafe) {
@@ -241,6 +344,28 @@ async function processLine(state: HarnessState, rawLine: string): Promise<"conti
       return "continue";
     }
 
+    if (cmd === "fidelity") {
+      const n = Number(arg);
+      if (!Number.isInteger(n) || n < 0) {
+        console.log(`잘못된 값: ${arg} (0 이상의 정수를 입력하세요)`);
+        return "continue";
+      }
+      state.maxFidelityRetries = n;
+      console.log(`[fidelityRetries: ${n}]`);
+      return "continue";
+    }
+
+    if (cmd === "round") {
+      const n = Number(arg);
+      if (![1, 2, 3].includes(n)) {
+        console.log(`잘못된 값: ${arg} (1, 2, 3 중 하나를 입력하세요)`);
+        return "continue";
+      }
+      state.round = n;
+      console.log(`[round: ${n}]`);
+      return "continue";
+    }
+
     console.log(`알 수 없는 명령어: /${cmd} (/help 참고)`);
     return "continue";
   }
@@ -261,6 +386,9 @@ function createInitialState(): HarnessState {
     history: [],
     // Phase 51 — 사용자 요청으로 후처리를 기본 on으로 바꿨다("항상 켜둔 채 점검").
     qualityCheckEnabled: true,
+    // Phase 55 — 1회 vs 5회 실증 비교 실험 전까지는 1회를 기본값으로 둔다.
+    maxFidelityRetries: 1,
+    round: 1,
   };
 }
 

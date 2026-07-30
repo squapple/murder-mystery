@@ -129,7 +129,12 @@
       "Bash(timeout 150 npx tsx --env-file=.env.local harness/chat.ts)",
       "Bash(cd \"C:/Workspace/Muder Mistery\" && sed -n '/사실대로 말씀하세요/,/형사>/p' /tmp/out2.log | head -20)",
       "Bash(npx tsc *)",
-      "Bash(timeout 60 npx tsx --env-file=.env.local harness/chat.ts)"
+      "Bash(timeout 60 npx tsx --env-file=.env.local harness/chat.ts)",
+      "Read(//c/Users/steplog/.wrangler/**)",
+      "Read(//c/Users/steplog/AppData/Roaming/xdg.config/.wrangler/**)",
+      "Bash(timeout 30 npx tsx --env-file=.env.local harness/_debug_fidelity.ts)",
+      "Bash(rm harness/_debug_fidelity.ts harness/_debug_fidelity2.ts)",
+      "Bash(rm -f /tmp/round_test.txt /tmp/verify56.txt /tmp/verify56b.txt /tmp/batch1.txt /tmp/batch2.txt /tmp/prod_test.json /tmp/test_fidelity.ts /tmp/out*.log)"
     ]
   }
 }

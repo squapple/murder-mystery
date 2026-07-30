@@ -49,9 +49,12 @@ export interface ResultCharacterView {
 }
 
 export interface ScoreBreakdown {
-  evidenceCollectionPoints: number;
-  evidenceFoundCount: number;
-  evidenceTotalCount: number;
+  personalItemPoints: number;
+  personalItemFoundCount: number;
+  personalItemTotalCount: number;
+  keyCluePoints: number;
+  keyClueFoundCount: number;
+  keyClueTotalCount: number;
   motivePoints: number;
   efficiencyBonus: number;
   total: number;

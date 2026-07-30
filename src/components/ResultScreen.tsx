@@ -56,22 +56,31 @@ export default function ResultScreen({
           <span className="text-base font-normal text-neutral-500"> / {result.score.maxTotal}</span>
         </p>
         <dl className="mt-3 grid grid-cols-2 gap-y-1 text-xs text-neutral-400">
-          <dt>증거 수집</dt>
+          <dt>수사 성실도</dt>
           <dd className="text-right text-neutral-200">
-            {result.score.evidenceFoundCount}/{result.score.evidenceTotalCount}개 ·{" "}
-            {result.score.evidenceCollectionPoints}점
+            {result.score.personalItemFoundCount}/{result.score.personalItemTotalCount}개 ·{" "}
+            {result.score.personalItemPoints}점
+          </dd>
+          <dt>핵심 단서 확보</dt>
+          <dd className="text-right text-neutral-200">
+            {result.score.keyClueFoundCount}/{result.score.keyClueTotalCount}개 ·{" "}
+            {result.score.keyCluePoints}점
           </dd>
           <dt>동기 파악</dt>
           <dd className="text-right text-neutral-200">{result.score.motivePoints}점</dd>
-          <dt>심문 효율(소요 시간)</dt>
+          <dt>심문 강도</dt>
           <dd className="text-right text-neutral-200">{result.score.efficiencyBonus}점</dd>
         </dl>
         {/* Phase 32 — 채점 기준은 이제 사건 브리핑 화면에서 게임 시작 전에 미리 공개된다
-            (CastingScreen). 여기서는 실제 집계 결과만 다시 확인시켜준다. */}
+            (CastingScreen). 여기서는 실제 집계 결과만 다시 확인시켜준다.
+            Phase 58 — 채점 체계 개편(수사 성실도/핵심 단서 분리, 심문 효율을 반복질문
+            기준으로 교체, 오답 시 등급/점수 상한)에 맞춰 문구 갱신.
+            Phase 59 — 심문 효율 → 심문 강도로 개명, 인내심을 얼마나 건드렸는지 기준으로
+            교체(하한 없음, 안 하면 0점). */}
         <p className="mt-3 text-[11px] leading-relaxed text-neutral-500">
-          증거 수집은 확보한 증거 개수당 5점 · 동기 파악은 배역당 10점 · 심문 효율은 게임
-          시작부터 최종 지목까지 걸린 시간이 짧을수록 최대 20점(15분 이내 만점, 이후
-          구간별로 감점).
+          수사 성실도는 소지품 확인 개수당 2점 · 핵심 단서 확보는 개당 10점 · 동기 파악은
+          배역당 10점 · 심문 강도는 용의자의 인내심을 실제로 건드릴 때마다 0.5점씩
+          쌓여 최대 22점. 오답 지목 시 등급은 항상 C, 점수는 65점을 넘지 않습니다.
         </p>
       </section>
 

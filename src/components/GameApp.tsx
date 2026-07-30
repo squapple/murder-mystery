@@ -476,10 +476,6 @@ export default function GameApp() {
         ])
       );
 
-      const totalElapsedSeconds = investigationStartedAt
-        ? Math.round((Date.now() - investigationStartedAt) / 1000)
-        : 0;
-
       const res = await fetch("/api/accuse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -487,7 +483,6 @@ export default function GameApp() {
           accusedCharacterId: characterId,
           castingToken,
           revealedEvidenceIds: Array.from(collectedEvidenceIds),
-          totalElapsedSeconds,
           conversationsByCharacter,
         }),
       });

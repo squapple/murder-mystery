@@ -136,10 +136,12 @@ export async function POST(req: NextRequest) {
 
   // Phase 39 — 인내심은 LLM을 부르기 전에 서버가 결정론적으로 계산한다
   // (patience.ts). 3인 전부 동일한 규칙, 진범 여부와 무관하게 대칭적으로 작동한다.
+  // Phase 56 — 라운드가 바뀔 때마다 1씩 깎이도록 round를 전달한다.
   const patienceLevel = computePatienceLevel(
     actorPromptView.patienceKeywords,
     conversationHistory,
-    userMessage
+    userMessage,
+    round
   );
   const locked = patienceLevel >= PATIENCE_MAX;
 

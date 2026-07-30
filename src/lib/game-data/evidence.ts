@@ -273,11 +273,15 @@ export const EVIDENCE: EvidenceItem[] = [
     revealTiming: "action_triggered",
   },
   {
+    // Phase 56 — 정민아의 임신/유산 서브플롯(stmt-jeong-breakup-reason에서는 뭉뚱그려서만
+    // 언급됨)을 구체적으로 발견할 경로가 없다는 지적에, 가방 소지품에 실마리를 심었다.
+    // 사용자 명시: "이상하다", "왜 있는지 모르겠다" 같은 해석성 문구를 절대 붙이지 않고
+    // 다른 소지품과 동일하게 나열만 한다 — 플레이어가 스스로 알아채야 한다.
     id: "ev-bag-jeong",
     category: "physical",
     name: "정민아 가방 확인",
     revealedFact: "정민아 가방 내용물 확인",
-    detail: "업무 수첩, 이어폰, 핸드크림, 두통약 등이 들어 있다.",
+    detail: "업무 수첩, 이어폰, 핸드크림, 두통약, 그리고 아기 옷 한 벌이 들어 있다.",
     revealTiming: "action_triggered",
   },
   {
