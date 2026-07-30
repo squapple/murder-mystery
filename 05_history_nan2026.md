@@ -722,7 +722,7 @@ Phase 44의 `INTERROGATION_CONTEXT`(2인칭 메타 지시문)가 재검증에서
 
 다음 단계(사용자 지시): 이 항목이 안정적으로 확인됐으니 맞춤법/오탈자/엉뚱한 답변 문제(원래 이번 세션의 출발점, `harness/relevance-check.ts`·`text-polish.ts` 프로토타입은 있지만 아직 실제 게임에 미연결)를 다음으로 살펴본다. 커밋·배포는 그 이후까지 보류.
 
-## Phase 51: 생성 전 품질 지침 + temperature 하향 실험 (In Progress)
+## Phase 51: 생성 전 품질 지침 + temperature 하향 실험 (Completed)
 
 사용자가 상용 LLM 서비스들의 "전처리(품질 지침 프롬프트) + 낮은 temperature + 후처리 4종" 조합을 실험해보자고 제안했다. 배포 전 미해결 3번 항목(맞춤법/오탈자/엉뚱한 답변)에 대한 대응이다.
 
@@ -731,7 +731,7 @@ Phase 44의 `INTERROGATION_CONTEXT`(2인칭 메타 지시문)가 재검증에서
 - **`src/app/api/interrogate/route.ts`**: `temperature: 1` → `ACTOR_TEMPERATURE`로 교체(실제 배포 경로에 반영됨 — 아직 커밋/배포는 안 함).
 - **`harness/chat.ts`**: `ACTOR_TEMPERATURE` 사용하도록 교체. 사용자가 "후처리 4종을 항상 켜둔 채 점검하자"고 해서 `polishEnabled`/`relevanceEnabled`/`safetyEnabled` 기본값을 전부 `true`로 변경. 포맷 검증(LLM 콜 없는 순수 로직, `isFormatValid`) 신설 — 빈 응답이나 브라켓 잔재가 남으면 1회 재생성.
 
-## Phase 52: 안전성 검사(safety-check.ts) 신설 + 버그 2건 수정 (In Progress)
+## Phase 52: 안전성 검사(safety-check.ts) 신설 + 버그 2건 수정 (Completed)
 
 후처리 4종 중 우리 프로젝트에 없던 "안전/정책 검사"를 `harness/safety-check.ts`로 신설(`relevance-check.ts`와 동일 구조, fail-open). 실전 테스트에서 두 가지 버그가 즉시 드러났다.
 
@@ -750,7 +750,7 @@ Phase 44의 `INTERROGATION_CONTEXT`(2인칭 메타 지시문)가 재검증에서
 - **커밋/배포는 아직 하지 말 것** — 사용자가 "3번까지 마무리하고 하자"고 명시적으로 보류함. 지금 우클 상태(git status)는 `characters.ts`/`truth-bible.ts`/`types.ts`/`actor-prompt.ts`/`nim-client.ts`/`interrogate/route.ts` 수정 + `harness/`(신규, 미추적) — 전부 아직 커밋 안 된 로컬 변경 상태.
 - **하네스 사용법 요약**: `npm run harness`(대화형, `/character park|lee|jeong`으로 캐릭터 전환), `npm run harness:factcheck`(3인 자유회상+취약점 프로빙), `npm run harness:lint`(정적 데이터 검사, LLM 콜 없음).
 
-## Phase 53: 후처리 3종 통합으로 API 레이트리밋 대응 (In Progress)
+## Phase 53: 후처리 3종 통합으로 API 레이트리밋 대응 (Completed)
 
 Phase 52에서 미해결로 남긴 레이트리밋 문제("4단계를 동시에 켠 상태로 여러 턴 검증 못 함")를 사용자가 최우선으로 지목 — "지금 한 번에 보내는 콜이 너무 많다, 쳐낼 수 있는 콜을 찾아 35±5콜 체제로 줄이자"는 구체적 목표를 제시했다.
 
@@ -767,3 +767,14 @@ Phase 52에서 미해결로 남긴 레이트리밋 문제("4단계를 동시에 
 - **temperature=0.2 표현 다양성 확인**: 박서연(ESTP)에게 동일 질문("회식 끝나고 몇 시에 방에 들어갔어요?")을 `/reset`으로 3회 반복한 결과, 사실 내용은 물론 문장 구조·어휘까지 거의 동일하게 반복됐다(예: "부축해서 방까지 데려다줬거든요", "기절하듯이 잠들어버려서"가 3회 모두 그대로 등장). **temperature=1로 임시 변경해 동일 테스트를 재실행했으나 결과는 사실상 동일**했다 — 즉 이 반복성은 temperature 설정 때문이 아니라 모델(`google/diffusiongemma-26b-a4b-it`) 자체가 사실관계가 명확히 고정된 질문에는 낮은 표현 다양성을 보이는 특성으로 판단된다. **결론: temperature=0.2로 낮춘 것이 표현 다양성을 추가로 해치지 않으므로(temperature=1에서도 이미 낮았음), 결정론적 이득만 취하고 그대로 유지한다.** (테스트 후 즉시 0.2로 원복 확인)
 - **통합 검수 파이프라인 종단 동작 확인**: 이현우(ESTP)에게 `patienceKeywords`(베란다/칼/흉기/방 배정)를 순서대로 건드리는 6턴 압박 시나리오를 실행 — 인내심이 1→2→3→4로 정상 상승했고(4/5에서 두 개 남은 질문은 새 키워드가 아니라 인내심이 더 오르지 않음, 정상), `runQualityCheck`가 실제로 발생한 "몰아 몰아붙이시면" 같은 중복 단어 글리치를 "몰아붙이시면"으로 의미·어조 손상 없이 정확히 교정하는 것을 확인했다 — 관련성/안전 판정도 6턴 내내 전부 "예"로 정확히 통과했다. 턴당 정확히 2콜(생성+통합검수)만 발생해 재시도 없이도 파이프라인이 안정적으로 동작함을 확인했다.
 - **다음 결정 필요 사항(사용자 확인 대기)**: 후처리(`quality-check.ts`)를 실제 `interrogate/route.ts`에 연결할지 여부. 연결하면 실제 플레이 중 턴당 API 호출이 1→2로 늘어나는데, 하네스 단독 테스트와 달리 실제 이벤트에서는 여러 참가자가 동시에 여러 캐릭터와 대화하므로 40RPM 한도에 더 쉽게 부딪힐 수 있다 — 연결 여부/전체 적용 vs 샘플링(예: 안전성만 랜덤 일부 턴에) 여부를 사용자와 논의 후 결정.
+
+## Phase 54: 통합 후처리를 실제 배포 경로에 연결 + 커밋/배포 (Completed)
+
+사용자가 "40RPM은 한 턴이 아니라 API 키 공유 총량 문제"라는 설명을 듣고 "혼자 플레이하면 지금 사양으로 문제없다"고 확인, 곧바로 커밋·배포를 지시했다. "하네스도 최종 변경된 사양으로 해볼 수 있게 해달라"는 요청은 하네스와 실제 배포 경로가 같은 모듈을 공유해야 한다는 뜻으로 해석해, 이번에 `quality-check.ts`를 프로덕션에 실제로 연결했다.
+
+- **`harness/quality-check.ts` → `src/lib/quality-check.ts` 승격**: 하네스 전용 프로토타입이었던 통합 검수 모듈을 공유 위치로 옮겼다 — 이제 `harness/chat.ts`와 `interrogate/route.ts`가 완전히 동일한 `runQualityCheck` 구현을 쓴다. `isFormatValid`(포맷 검증, LLM 콜 없음)와 `SAFETY_FALLBACK_TEXT`(안전 실패 시 대체 문구)도 같은 파일로 옮겨 두 경로가 하나도 다르지 않게 했다.
+- **`src/app/api/interrogate/route.ts`**: 기존엔 생성 콜 1개 후 바로 텍스트를 반환했는데, 인라인이던 생성 로직을 `generateOnce(extraReminder?)` 헬퍼로 추출해 재생성 시(포맷 무효/관련성 실패) 재사용하도록 리팩터링했다. 그 뒤 harness/chat.ts와 동일한 흐름을 그대로 적용: ①포맷 검증 실패 시 1회 재생성 → ②통합 검수(교정+관련성+안전, 콜 1개) → ③관련성 실패 시 1회 재생성 후 재검수 → ④안전 실패 시 재생성 없이 고정 폴백. 턴당 기본 콜이 1→2로 늘지만, 사용자가 확인한 대로 혼자/소수 플레이 상황에서는 40RPM 한도에 문제되지 않는다 — 코드 상단 주석에 이 트레이드오프와 "다수 동시 플레이 시 재검토" 조건을 명시해뒀다.
+- **검증**: `npm run lint`/`npx tsc --noEmit`/`npm run build` 전부 통과. `npm run harness`로 공유 모듈 경로 변경 후에도 정상 동작 확인. 로컬 `next dev` 프리뷰로 실제 브라우저에서 조사 시작 → 박서연 심문 1턴을 끝까지 재현해, 서버 로그에서 `relevance=true safety=true`(전체 파이프라인 정상 통과)와 `elapsedMs=974`(생성+통합검수 합산, 여전히 1초 미만)를 확인했다.
+- **커밋**: `Phase 44-54: 대화 품질 테스트 하네스 구축 + 통합 후처리 파이프라인 연결` — Phase 44부터 이번까지 쌓여있던 로컬 변경(harness/ 신규, characters.ts/truth-bible.ts/types.ts/actor-prompt.ts/nim-client.ts/interrogate/route.ts 수정, quality-check.ts 신규)을 한 번에 커밋했다.
+- **배포**: `npm run deploy`(OpenNext + Wrangler, Cloudflare Workers) 실행 — 최초 시도는 이 세션이 비대화형이라 `CLOUDFLARE_API_TOKEN` 부재로 실패했고, 사용자가 직접 `npx wrangler login`으로 로그인한 뒤 재시도해 성공했다. `https://murder-mystery.squapple.workers.dev`에 배포 완료(Version ID `33c81d9c-ed54-4f92-8cb9-734d433a1e6d`).
+- **배포 후 실전 검증**: 배포된 URL에 직접 `/api/casting` → `/api/interrogate` 순서로 실제 요청을 보내 200 응답과 1.63초 응답 시간을 확인했다 — 로컬 하네스/프리뷰뿐 아니라 실제 프로덕션 경로에서도 통합 후처리 파이프라인이 정상 동작함을 최종 확인.
