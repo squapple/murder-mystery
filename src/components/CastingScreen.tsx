@@ -72,14 +72,19 @@ export default function CastingScreen({
           Phase 59 — "심문 효율"을 "심문 강도"로 개명. 낭비 없이 던질수록(적을수록)
           유리하던 이전 방향에서 인내심을 실제로 얼마나 건드렸는지(많을수록 유리)로
           뒤집혀, "효율"이라는 이름이 더 이상 안 맞았다 — 심문을 아예 안 하면 0점이
-          되므로 하한 보장 문구도 뺐다. */}
+          되므로 하한 보장 문구도 뺐다.
+          Phase 61 — "수사 성실도" 문구가 "가방·신발·휴대폰을 확인하라"고 구체적
+          방법까지 알려줘 스포일러라는 지적(사용자) — 소지품 요청은 UI 버튼 없이
+          플레이어가 스스로 떠올려야 재미있는 자유 텍스트 메커니즘(Phase 39)인데,
+          채점 기준에서 정확한 품목을 나열하면 그 발견의 재미가 죽는다. "소지품을
+          확인할 때마다"로 일반화해 방법은 숨기고 존재(개수)만 남겼다 — "핵심 단서
+          확보"가 대상 인물을 숨기는 것과 같은 원칙. */}
       <section className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4 text-sm">
         <h2 className="mb-2 font-semibold text-neutral-200">채점 기준 (100점 만점)</h2>
         <ul className="space-y-1 text-xs text-neutral-400">
           <li>
-            · 수사 성실도 — 용의자들의 소지품(가방·신발·휴대폰)을 확인할 때마다 점수가
-            쌓입니다 (전체 {SCORING_SUMMARY.personalItemTotalCount}개, 개당{" "}
-            {SCORING_SUMMARY.pointsPerPersonalItem}점)
+            · 수사 성실도 — 용의자들의 소지품을 확인할 때마다 점수가 쌓입니다 (전체{" "}
+            {SCORING_SUMMARY.personalItemTotalCount}개, 개당 {SCORING_SUMMARY.pointsPerPersonalItem}점)
           </li>
           <li>
             · 핵심 단서 확보 — 사건 해결에 실제로 기여하는 결정적인 단서를 찾아내면 더 큰

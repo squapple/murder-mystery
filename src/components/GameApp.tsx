@@ -592,7 +592,7 @@ export default function GameApp() {
         </div>
         <div className="flex items-center gap-3">
           {investigationStartedAt !== null && (
-            <span className="font-mono text-sm text-neutral-400" title="경과 시간(심문 효율 점수에 반영됩니다)">
+            <span className="font-mono text-sm text-neutral-400" title="경과 시간(참고용 — 점수에는 반영되지 않습니다)">
               ⏱ {formatElapsedTime(nowTick - investigationStartedAt)}
             </span>
           )}

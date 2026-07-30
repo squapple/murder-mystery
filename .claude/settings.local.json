@@ -135,7 +135,8 @@
       "Bash(timeout 30 npx tsx --env-file=.env.local harness/_debug_fidelity.ts)",
       "Bash(rm harness/_debug_fidelity.ts harness/_debug_fidelity2.ts)",
       "Bash(rm -f /tmp/round_test.txt /tmp/verify56.txt /tmp/verify56b.txt /tmp/batch1.txt /tmp/batch2.txt /tmp/prod_test.json /tmp/test_fidelity.ts /tmp/out*.log)",
-      "Bash(curl -s -X POST http://localhost:3000/api/casting -w \"\\\\nHTTP:%{http_code}\\\\n\")"
+      "Bash(curl -s -X POST http://localhost:3000/api/casting -w \"\\\\nHTTP:%{http_code}\\\\n\")",
+      "Bash(rm -f /tmp/patience_test*.mjs /tmp/req.json)"
     ]
   }
 }
