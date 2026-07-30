@@ -78,12 +78,17 @@ export default function CastingScreen({
           플레이어가 스스로 떠올려야 재미있는 자유 텍스트 메커니즘(Phase 39)인데,
           채점 기준에서 정확한 품목을 나열하면 그 발견의 재미가 죽는다. "소지품을
           확인할 때마다"로 일반화해 방법은 숨기고 존재(개수)만 남겼다 — "핵심 단서
-          확보"가 대상 인물을 숨기는 것과 같은 원칙. */}
+          확보"가 대상 인물을 숨기는 것과 같은 원칙.
+          Phase 63 — "직접 획득한 유의미한 증거물의 개수에 따라"로 재수정(사용자).
+          "유의미한"은 "핵심 단서"급 중요도가 아니라 "시스템에 정의된 실제 증거
+          항목이냐"는 뜻이다(예: "안경 보여주세요"처럼 requestableItems에 없는
+          임의의 물건을 요청하면 아무 증거도 해금되지 않아 점수에 안 잡힌다 — 이런
+          "무의미한" 시도와 구분하기 위한 단어 선택이라고 사용자가 명확히 함). */}
       <section className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4 text-sm">
         <h2 className="mb-2 font-semibold text-neutral-200">채점 기준 (100점 만점)</h2>
         <ul className="space-y-1 text-xs text-neutral-400">
           <li>
-            · 수사 성실도 — 용의자들의 소지품을 확인할 때마다 점수가 쌓입니다 (전체{" "}
+            · 수사 성실도 — 직접 획득한 유의미한 증거물의 개수에 따라 점수가 쌓입니다 (전체{" "}
             {SCORING_SUMMARY.personalItemTotalCount}개, 개당 {SCORING_SUMMARY.pointsPerPersonalItem}점)
           </li>
           <li>
