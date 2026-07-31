@@ -136,7 +136,16 @@
       "Bash(rm harness/_debug_fidelity.ts harness/_debug_fidelity2.ts)",
       "Bash(rm -f /tmp/round_test.txt /tmp/verify56.txt /tmp/verify56b.txt /tmp/batch1.txt /tmp/batch2.txt /tmp/prod_test.json /tmp/test_fidelity.ts /tmp/out*.log)",
       "Bash(curl -s -X POST http://localhost:3000/api/casting -w \"\\\\nHTTP:%{http_code}\\\\n\")",
-      "Bash(rm -f /tmp/patience_test*.mjs /tmp/req.json)"
+      "Bash(rm -f /tmp/patience_test*.mjs /tmp/req.json)",
+      "Bash(powershell -Command \"Get-Process -Id 25524 -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, Path, StartTime\")",
+      "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter 'ProcessId=25524' | Select-Object CommandLine\")",
+      "Bash(powershell -Command \"Stop-Process -Id 25524 -Force\")",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue\")",
+      "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter 'ProcessId=19260' | Select-Object CommandLine\")",
+      "Bash(powershell -Command \"Stop-Process -Id 19260 -Force\")",
+      "Bash(timeout 300 npx tsx --env-file=.env.local harness/_debug_empty_response3.ts)",
+      "Bash(sed -i 's/const RUNS = 3;/const RUNS = 5;/; s/await runOne\\(client, c.question, c.original, 1\\);/await runOne\\(client, c.question, c.original, 0.5\\);/; s/temp=1 시도/temp=0.5 시도/' harness/_temp1_test.ts)",
+      "Bash(timeout 150 npx tsx --env-file=.env.local harness/_temp1_test.ts)"
     ]
   }
 }

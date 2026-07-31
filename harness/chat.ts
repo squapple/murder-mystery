@@ -18,6 +18,11 @@
 // (verifyCorrectionFidelity)를 추가했다. 재검증 횟수(1회 vs 5회)를 실험으로
 // 비교하기 위해 /fidelity 명령어로 런타임에 조절 가능하게 했다.
 //
+// Phase 68 — 로그(debug-log.ts) 분석으로 "교정"이 관용구를 잘못 재현하는 사례를
+// 발견해, maxFidelityRetries를 다 써도 반려되면 마지막 한 번만 더 느리지만 정확한
+// ESCALATION_MODEL로 교정을 재시도하는 기능을 추가했다(quality-check.ts의
+// correctWithFidelityAndEscalation).
+//
 // 실행: npm run harness  (내부적으로 tsx --env-file=.env.local harness/chat.ts)
 //
 // 명령어:
@@ -37,7 +42,9 @@ import {
   NIM_MODEL,
   ACTOR_TEMPERATURE,
   MAX_FIDELITY_RETRIES,
+  ESCALATION_MODEL,
   getReasoningExtraParams,
+  withRateLimitRetry,
 } from "../src/lib/nim-client";
 import {
   buildActorSystemPrompt,
@@ -51,7 +58,7 @@ import {
   runQualityCheck,
   isFormatValid,
   SAFETY_FALLBACK_TEXT,
-  verifyCorrectionFidelity,
+  correctWithFidelityAndEscalation,
   type QualityCheckResult,
 } from "../src/lib/quality-check";
 import type { CharacterId, Persona } from "../src/lib/game-data/types";
@@ -132,14 +139,18 @@ async function generateOnce(
     { role: "user", content: userMessage },
   ];
 
-  const completion = await client.chat.completions.create({
-    model: NIM_MODEL,
-    max_tokens: 2048,
-    temperature: ACTOR_TEMPERATURE,
-    top_p: 0.95,
-    messages,
-    ...reasoningExtraParams,
-  } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming & typeof reasoningExtraParams);
+  const completion = await withRateLimitRetry(
+    () =>
+      client.chat.completions.create({
+        model: NIM_MODEL,
+        max_tokens: 2048,
+        temperature: ACTOR_TEMPERATURE,
+        top_p: 0.95,
+        messages,
+        ...reasoningExtraParams,
+      } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming & typeof reasoningExtraParams),
+    "harness"
+  );
 
   const rawText = completion.choices[0]?.message?.content ?? "";
   return parseActorResponse(rawText).text;
@@ -149,8 +160,11 @@ async function generateOnce(
  * 교정본이 원문과 다를 때만(폴리시 미변경 시 검증 콜 자체를 생략) 같은 액터
  * 페르소나를 다시 불러 의미 보존 여부를 확인한다(Phase 55 실험). 실패하면
  * previousRejectedCorrection을 알려주고 재교정→재검증을 최대
- * state.maxFidelityRetries회까지 반복하고, 그래도 실패하면 원문(source)으로
- * 폴백한다.
+ * state.maxFidelityRetries회까지 반복하고, 그래도 실패하면 마지막으로 한 번
+ * ESCALATION_MODEL로 교정을 재시도한 뒤(Phase 68) 그것도 실패하면 원문(source)으로
+ * 폴백한다. 실제 로직은 quality-check.ts의 correctWithFidelityAndEscalation에
+ * 있다(interrogate/accuse/harness 공유) — 시도별 상세 로그는 콘솔이 아니라
+ * logs/quality-pipeline.log(debug-log.ts)에서 확인한다.
  */
 async function runQualityCheckWithFidelity(
   state: HarnessState,
@@ -159,60 +173,34 @@ async function runQualityCheckWithFidelity(
   sourceText: string,
   initialVerdict: QualityCheckResult
 ): Promise<{ finalText: string; verdict: QualityCheckResult }> {
-  let verdict = initialVerdict;
-
-  if (verdict.finalText.trim() === sourceText.trim()) {
-    return { finalText: verdict.finalText, verdict };
-  }
-
   const client = getNimClient();
-  const reasoningExtraParams = getReasoningExtraParams(NIM_MODEL);
   const systemPrompt = buildSystemPromptForState(state, patienceLevel);
   const historyMessages: OpenAI.Chat.ChatCompletionMessageParam[] = state.history.map((t) => ({
     role: t.role,
     content: t.content,
   }));
+  const logContext = { character: state.characterId, persona: state.personaKey };
 
-  for (let attempt = 1; attempt <= state.maxFidelityRetries; attempt++) {
-    const fidelity = await verifyCorrectionFidelity(
-      client,
-      NIM_MODEL,
-      systemPrompt,
-      historyMessages,
-      userMessage,
-      sourceText,
-      verdict.finalText,
-      reasoningExtraParams
-    );
-    console.log(
-      `[FIDELITY ${attempt}/${state.maxFidelityRetries}] 일치=${fidelity.matches ? "예" : "아니오"}(${fidelity.reason})`
-    );
+  const verdict = await correctWithFidelityAndEscalation(
+    client,
+    NIM_MODEL,
+    ESCALATION_MODEL,
+    systemPrompt,
+    historyMessages,
+    userMessage,
+    sourceText,
+    initialVerdict,
+    state.maxFidelityRetries,
+    logContext
+  );
 
-    if (fidelity.matches) {
-      return { finalText: verdict.finalText, verdict };
-    }
-
-    if (attempt >= state.maxFidelityRetries) break;
-
-    const rejected = verdict.finalText;
-    verdict = await runQualityCheck(
-      client,
-      NIM_MODEL,
-      userMessage,
-      sourceText,
-      reasoningExtraParams,
-      rejected
-    );
-    console.log(`[FIDELITY RETRY ${attempt + 1}] 재교정: ${verdict.finalText}`);
-
-    if (verdict.finalText.trim() === sourceText.trim()) {
-      // 재교정 결과가 원문과 동일해졌다 — 검증할 변경점이 없으므로 그대로 채택.
-      return { finalText: verdict.finalText, verdict };
-    }
+  if (verdict.finalText.trim() === sourceText.trim() && initialVerdict.finalText.trim() !== sourceText.trim()) {
+    console.log("[FIDELITY FALLBACK] 의미 보존 검증 끝내 실패 — 교정 포기, 원문 사용");
+  } else {
+    console.log(`[FIDELITY] 최종 채택: ${verdict.finalText}`);
   }
 
-  console.log("[FIDELITY FALLBACK] 의미 보존 검증 끝내 실패 — 교정 포기, 원문 사용");
-  return { finalText: sourceText, verdict };
+  return { finalText: verdict.finalText, verdict };
 }
 
 async function handleUserMessage(state: HarnessState, userMessage: string) {
@@ -257,7 +245,15 @@ async function handleUserMessage(state: HarnessState, userMessage: string) {
   // 쪽이 안전 계층의 목적에 맞다는 기존 판단 유지). 교정으로 텍스트가 실제로
   // 바뀐 경우엔 액터 재확인(의미 보존 검증, Phase 55)을 추가로 거친다.
   if (state.qualityCheckEnabled) {
-    let verdict = await runQualityCheck(getNimClient(), NIM_MODEL, userMessage, finalText, getReasoningExtraParams(NIM_MODEL));
+    let verdict = await runQualityCheck(
+      getNimClient(),
+      NIM_MODEL,
+      userMessage,
+      finalText,
+      getReasoningExtraParams(NIM_MODEL),
+      undefined,
+      { character: state.characterId, persona: state.personaKey }
+    );
     console.log(`[QUALITY] 관련성=${verdict.isRelevant ? "예" : "아니오"}(${verdict.relevanceReason}) 안전=${verdict.isSafe ? "예" : "아니오"}(${verdict.safetyReason})`);
     console.log(`[POLISHED] ${verdict.finalText}`);
 
@@ -274,7 +270,15 @@ async function handleUserMessage(state: HarnessState, userMessage: string) {
         "방금 답변이 형사의 질문 의도를 놓쳤다. 형사가 실제로 무엇을 물었는지 다시 확인하고, 그 질문에 직접 대응하는 대사로 다시 답하라."
       );
       console.log(`[RETRY RAW] ${retryText}`);
-      verdict = await runQualityCheck(getNimClient(), NIM_MODEL, userMessage, retryText, getReasoningExtraParams(NIM_MODEL));
+      verdict = await runQualityCheck(
+        getNimClient(),
+        NIM_MODEL,
+        userMessage,
+        retryText,
+        getReasoningExtraParams(NIM_MODEL),
+        undefined,
+        { character: state.characterId, persona: state.personaKey }
+      );
       console.log(`[RETRY QUALITY] 관련성=${verdict.isRelevant ? "예" : "아니오"}(${verdict.relevanceReason}) 안전=${verdict.isSafe ? "예" : "아니오"}(${verdict.safetyReason})`);
 
       const retryVerified = await runQualityCheckWithFidelity(state, userMessage, patienceLevel, retryText, verdict);

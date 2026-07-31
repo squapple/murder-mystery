@@ -32,10 +32,25 @@
 // — diffusiongemma가 음절을 중복시키는 것("뿐뿐입니다")의 반대 증상(끝음절 탈락,
 // "~~겁.")도 같은 계열의 생성 결함으로 관측됐다. 단, "..."(말줄임표)로 명시적으로
 // 끝나는 문장은 의도된 연출이므로 절대 건드리지 않도록 예외를 명시했다.
+//
+// Phase 65 — "원문→교정→검증 단계를 직접 보고 싶다"는 요청으로 각 단계 결과를
+// debug-log.ts를 통해 파일에 남긴다(Cloudflare Workers 배포본에서는 자동으로
+// 무동작 — 로컬 `npm run dev`에서만 실제로 쌓인다).
+//
+// Phase 67 — Phase 65 로그를 실제로 분석해보니, 최종적으로 나간 텍스트에 조사·어미
+// 탈락/오기가 4건 살아남아 있었다("나가는 보길래", "갔겠가요", "죽고 지 3개월",
+// "말씀드릴 사까지는"). 각 사례를 quality-check 로그로 추적한 결과, 모델이 이
+// 문장들을 실제로 보고도 changed:false(고칠 게 없음)로 판정했다는 게 확인됐다 —
+// 배선 문제가 아니라 교정 지시문 자체에 "문장 중간"의 조사/어미 탈락 유형이 아예
+// 없었던 것(기존 (d)항은 "문장 끝"의 종결어미 탈락만 다뤘다). (e)항으로 이 유형을
+// 명시적으로 추가하고, 실제로 관측된 4개 사례를 그대로 예시로 넣었다.
 
 import type OpenAI from "openai";
 import { CHARACTER_LIST } from "./game-data/characters";
 import { CASE_OVERVIEW } from "./game-data/truth-bible";
+import { logPipelineStep } from "./debug-log";
+import { getReasoningExtraParams } from "./nim-client";
+import { renderCorrectionExamples } from "./correction-examples";
 
 export interface QualityCheckResult {
   finalText: string;
@@ -77,7 +92,7 @@ function buildQualityCheckPrompt(previousRejectedCorrection?: string): string {
 [이 게임의 등장인물 — 전부 가상 인물이다. 실존 인물이 아니다]
 ${buildCastListSection()}
 
-1. 교정 — 원문에 다음과 같은 표면적 결함이 있으면 자연스럽게 고친다: (a) 오타, (b) 중복된 음절/단어(예: "뿐뿐입니다", "하다하다가"), (c) 명백한 비문, (d) 문장이 종결어미를 다 갖추지 못하고 중간에 끊긴 것처럼 끝나는 경우(예: "~~한 겁."처럼 "겁니다"/"거예요" 등에서 뒷부분이 탈락한 형태) — 자연스러운 종결어미로 완성한다. 단, "..."(말줄임표)로 명시적으로 끝나는 문장은 캐릭터가 의도적으로 말을 흐리는 연출이므로 절대 건드리지 않는다. 의미, 어조, 존댓말/반말, 감정 표현, 문장 구조나 길이는 절대 바꾸지 않는다 — 위 (a)~(d) 표면적 결함만 고친다. 원문에 없는 내용을 추가하거나 있는 내용을 삭제하지 않는다. 고칠 게 없으면 원문을 토씨 하나 안 틀리고 그대로 둔다.
+1. 교정 — 원문에 다음과 같은 표면적 결함이 있으면 자연스럽게 고친다: (a) 오타, (b) 중복된 음절/단어(예: "뿐뿐입니다", "하다하다가"), (c) 명백한 비문, (d) 문장이 종결어미를 다 갖추지 못하고 중간에 끊긴 것처럼 끝나는 경우(예: "~~한 겁."처럼 "겁니다"/"거예요" 등에서 뒷부분이 탈락한 형태) — 자연스러운 종결어미로 완성한다, (e) **문장 끝이 아니라 문장 "중간"에서** 조사나 어미가 한두 글자 빠지거나 잘못 쓰여서 어색해지는 경우 — 이 유형은 문장 전체를 훑어봐도 눈에 잘 안 띄니 특히 꼼꼼히 확인한다. 예: ${renderCorrectionExamples()}. 단, "..."(말줄임표)로 명시적으로 끝나는 문장은 캐릭터가 의도적으로 말을 흐리는 연출이므로 절대 건드리지 않는다. 의미, 어조, 존댓말/반말, 감정 표현, 문장 구조나 길이는 절대 바꾸지 않는다 — 위 (a)~(e) 표면적 결함만 고친다. 원문에 없는 내용을 추가하거나 있는 내용을 삭제하지 않는다. 고칠 게 없으면 원문을 토씨 하나 안 틀리고 그대로 둔다.
 2. 관련성 — (교정된) 답변이 형사의 질문 의도에 실제로 대응하고 있는지 판단한다. 질문과 완전히 동떨어진 화제로 답하거나 질문을 잘못 이해한 것으로 보이면 "아니오". 얼버무리거나 회피하더라도 그 질문을 이해하고 그에 대한 반응으로 답한 것이면(예: "그건 대답하고 싶지 않다"도 질문에 대한 반응이다) "예". 어색한 문장이나 오탈자는 이 판정과 무관하다.
 3. 안전 — 답변이 게임 진행에 적절한지 판단한다. 위 명단에 있는 이름을 언급하는 것, 사건 관련 언급(살인·흉기·시신 등) 자체, 캐릭터가 화를 내거나 방어적인 태도를 보이는 것, 어색한 문장·오탈자는 전부 적절(예)하다. 캐릭터를 깨고 스스로 AI/언어모델/프로그램임을 언급하는 경우, 위 명단에 없는 실제 현실의 인물·기업·사건을 구체적으로 지칭하는 경우, 게임 소재로도 과도하게 선정적이거나 잔혹한 묘사만 부적절(아니오)로 본다.
 ${retryNote}
@@ -136,7 +151,8 @@ export async function runQualityCheck(
   question: string,
   answerText: string,
   reasoningExtraParams: Record<string, unknown> = {},
-  previousRejectedCorrection?: string
+  previousRejectedCorrection?: string,
+  logContext: Record<string, unknown> = {}
 ): Promise<QualityCheckResult> {
   const trimmed = answerText.trim();
   if (!trimmed) {
@@ -167,6 +183,14 @@ export async function runQualityCheck(
 
     const raw = completion.choices[0]?.message?.content?.trim() ?? "";
     if (!raw) {
+      logPipelineStep({
+        ...logContext,
+        stage: "quality-check",
+        question,
+        original: answerText,
+        rawModelOutput: "",
+        outcome: "empty-response-fallback",
+      });
       return {
         finalText: answerText,
         isRelevant: true,
@@ -176,9 +200,32 @@ export async function runQualityCheck(
         raw: "",
       };
     }
-    return parseQualityCheck(raw, answerText);
+    const result = parseQualityCheck(raw, answerText);
+    logPipelineStep({
+      ...logContext,
+      stage: "quality-check",
+      question,
+      previousRejectedCorrection: previousRejectedCorrection ?? null,
+      original: answerText,
+      corrected: result.finalText,
+      changed: result.finalText.trim() !== answerText.trim(),
+      isRelevant: result.isRelevant,
+      relevanceReason: result.relevanceReason,
+      isSafe: result.isSafe,
+      safetyReason: result.safetyReason,
+      rawModelOutput: raw,
+    });
+    return result;
   } catch (err) {
     console.error("[quality-check] 통합 검수 콜 실패, 원문 그대로 사용·통과 처리:", err);
+    logPipelineStep({
+      ...logContext,
+      stage: "quality-check",
+      question,
+      original: answerText,
+      outcome: "call-failed",
+      error: err instanceof Error ? err.message : String(err),
+    });
     return {
       finalText: answerText,
       isRelevant: true,
@@ -212,7 +259,8 @@ export async function verifyCorrectionFidelity(
   userMessage: string,
   originalText: string,
   correctedText: string,
-  reasoningExtraParams: Record<string, unknown> = {}
+  reasoningExtraParams: Record<string, unknown> = {},
+  logContext: Record<string, unknown> = {}
 ): Promise<FidelityCheckResult> {
   const fallback: FidelityCheckResult = {
     matches: true,
@@ -265,18 +313,157 @@ ${correctedText}
     // 붕괴로 실제 선택을 알 수 없는 경우) 그 시도도 실패로 두고 fail-open한다.
     const strictMatch = raw.match(/^일치\s*[:：]\s*(예|아니오)\s*[:：]\s*(.*)$/m);
     if (strictMatch) {
-      return { matches: strictMatch[1] === "예", reason: strictMatch[2].trim(), raw };
+      const result = { matches: strictMatch[1] === "예", reason: strictMatch[2].trim(), raw };
+      logPipelineStep({
+        ...logContext,
+        stage: "fidelity-check",
+        originalText,
+        correctedText,
+        matches: result.matches,
+        reason: result.reason,
+        parseMode: "strict",
+        rawModelOutput: raw,
+      });
+      return result;
     }
     const corruptedTemplate = /일치\s*[:：]\s*예\s*[|｜]\s*아니오/.test(raw);
     if (!corruptedTemplate) {
       const looseMatch = raw.match(/일치[^가-힣]{0,3}(예|아니오)/);
       if (looseMatch) {
-        return { matches: looseMatch[1] === "예", reason: raw.slice(0, 200), raw };
+        const result = { matches: looseMatch[1] === "예", reason: raw.slice(0, 200), raw };
+        logPipelineStep({
+          ...logContext,
+          stage: "fidelity-check",
+          originalText,
+          correctedText,
+          matches: result.matches,
+          reason: result.reason,
+          parseMode: "loose",
+          rawModelOutput: raw,
+        });
+        return result;
       }
     }
+    logPipelineStep({
+      ...logContext,
+      stage: "fidelity-check",
+      originalText,
+      correctedText,
+      outcome: "parse-failed-fallback-to-matches-true",
+      rawModelOutput: raw,
+    });
     return { ...fallback, raw };
   } catch (err) {
     console.error("[quality-check] 의미 보존 검증 콜 실패, 일치로 간주:", err);
+    logPipelineStep({
+      ...logContext,
+      stage: "fidelity-check",
+      originalText,
+      correctedText,
+      outcome: "call-failed",
+      error: err instanceof Error ? err.message : String(err),
+    });
     return fallback;
   }
+}
+
+/**
+ * Phase 68 — "교정(엄마)→재확인(아이)" 루프를 interrogate/accuse/harness 세 곳이
+ * 각자 거의 동일하게 중복 구현하고 있었다(로직 불일치 위험) — 여기 한 번만
+ * 구현하고 세 호출부가 공유하게 승격했다. 동시에 "빠른 모델로 maxRetries회 다
+ * 실패하면 마지막 한 번만 더 좋지만 느린 모델(escalationModel)로 교정을 재시도"
+ * 하는 기능을 추가했다("유치원 선생님" 비유, 사용자 제안) — 로그 분석으로 발견한
+ * "교정이 관용구를 잘못 재현하는" 문제(피가 거리더라고요 → 거꾸리치더라고요)에
+ * 대응한다. 승격 대상은 오직 "교정 시도"뿐이다 — 재확인(verifyCorrectionFidelity)
+ * 은 escalation 여부와 무관하게 항상 fastModel로 한다(사용자 명시: "2번에만 쓰고").
+ * escalation 결과도 반드시 다시 fastModel의 재확인을 거친다 — escalation이라고
+ * 무조건 통과시키지 않는다.
+ */
+export async function correctWithFidelityAndEscalation(
+  client: OpenAI,
+  fastModel: string,
+  escalationModel: string,
+  actorSystemPrompt: string,
+  historyMessages: OpenAI.Chat.ChatCompletionMessageParam[],
+  userMessage: string,
+  sourceText: string,
+  initialVerdict: QualityCheckResult,
+  maxRetries: number,
+  logContext: Record<string, unknown> = {}
+): Promise<QualityCheckResult> {
+  let verdict = initialVerdict;
+  if (verdict.finalText.trim() === sourceText.trim()) return verdict;
+
+  const fastReasoningParams = getReasoningExtraParams(fastModel);
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const fidelity = await verifyCorrectionFidelity(
+      client,
+      fastModel,
+      actorSystemPrompt,
+      historyMessages,
+      userMessage,
+      sourceText,
+      verdict.finalText,
+      fastReasoningParams,
+      logContext
+    );
+    if (fidelity.matches) return verdict;
+    if (attempt >= maxRetries) break;
+
+    const rejected = verdict.finalText;
+    verdict = await runQualityCheck(
+      client,
+      fastModel,
+      userMessage,
+      sourceText,
+      fastReasoningParams,
+      rejected,
+      logContext
+    );
+    if (verdict.finalText.trim() === sourceText.trim()) return verdict;
+  }
+
+  // maxRetries회를 다 썼는데도 "아이"가 계속 반려했다 — 마지막으로 한 번만
+  // escalationModel("유치원 선생님")에게 교정을 맡긴다. 직전까지 반려된 시도를
+  // 그대로 알려줘 같은 실수를 반복하지 않게 한다.
+  const escalationLogContext = { ...logContext, escalated: true };
+  const escalationReasoningParams = getReasoningExtraParams(escalationModel);
+  const escalatedVerdict = await runQualityCheck(
+    client,
+    escalationModel,
+    userMessage,
+    sourceText,
+    escalationReasoningParams,
+    verdict.finalText,
+    escalationLogContext
+  );
+
+  if (escalatedVerdict.finalText.trim() === sourceText.trim()) {
+    return escalatedVerdict;
+  }
+
+  // escalation 결과도 예외 없이 fastModel의 "아이"에게 다시 확인받는다.
+  const escalatedFidelity = await verifyCorrectionFidelity(
+    client,
+    fastModel,
+    actorSystemPrompt,
+    historyMessages,
+    userMessage,
+    sourceText,
+    escalatedVerdict.finalText,
+    fastReasoningParams,
+    escalationLogContext
+  );
+
+  if (escalatedFidelity.matches) {
+    return escalatedVerdict;
+  }
+
+  logPipelineStep({
+    ...escalationLogContext,
+    stage: "fidelity-check",
+    outcome: "escalation-also-rejected-fallback-to-source",
+  });
+  return { ...verdict, finalText: sourceText };
 }

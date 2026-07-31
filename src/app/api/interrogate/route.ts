@@ -20,6 +20,12 @@
 // 불러 확인)을 여기 연결했다. 교정으로 텍스트가 실제로 바뀐 경우에만 추가 콜이
 // 나가므로(변경 없으면 스킵) 평소엔 비용 증가가 크지 않다. 재시도 횟수는
 // nim-client.ts의 MAX_FIDELITY_RETRIES(harness와 공유)로 고정.
+//
+// Phase 68 — "교정→재확인" 재시도 로직을 quality-check.ts의
+// correctWithFidelityAndEscalation으로 승격(interrogate/accuse/harness 중복 제거).
+// 빠른 모델(diffusiongemma)로 MAX_FIDELITY_RETRIES회를 다 써도 반려되면, 마지막
+// 한 번만 ESCALATION_MODEL(deepseek-v4-flash, Phase 5에서 유일하게 V1~V4를 전부
+// 통과했던 폴백 모델)로 교정을 재시도한다 — 검증은 그 결과도 항상 빠른 모델로 한다.
 
 import { NextRequest, NextResponse } from "next/server";
 import type OpenAI from "openai";
@@ -28,13 +34,15 @@ import {
   NIM_MODEL,
   ACTOR_TEMPERATURE,
   MAX_FIDELITY_RETRIES,
+  ESCALATION_MODEL,
   getReasoningExtraParams,
+  withRateLimitRetry,
 } from "@/lib/nim-client";
 import {
   runQualityCheck,
   isFormatValid,
   SAFETY_FALLBACK_TEXT,
-  verifyCorrectionFidelity,
+  correctWithFidelityAndEscalation,
 } from "@/lib/quality-check";
 import {
   buildActorSystemPrompt,
@@ -46,6 +54,7 @@ import { CHARACTERS, getActorPromptView } from "@/lib/game-data/characters";
 import { PERSONAS } from "@/lib/game-data/personas";
 import { EVIDENCE } from "@/lib/game-data/evidence";
 import { resolvePersonaForCharacter } from "@/lib/casting";
+import { logPipelineStep } from "@/lib/debug-log";
 import type { CharacterId, Persona } from "@/lib/game-data/types";
 
 // Edge 런타임 되돌림 — Phase 18 참고. Edge는 25초 응답 마감이 있는데, 콜 수를
@@ -183,6 +192,19 @@ export async function POST(req: NextRequest) {
 
       const client = getNimClient();
 
+      // Phase 65 — 이 턴의 파이프라인 로그(quality-check.ts가 남기는 개별 단계
+      // 로그들)를 character/round/turn 컨텍스트로 감싸는 시작 표시. 이 줄과 아래
+      // "turn-end" 줄 사이에 찍힌 quality-check/fidelity-check 로그가 이 턴에
+      // 속한다 — 시간순으로 쭉 이어서 보면 원문→교정→검증 흐름을 그대로 따라갈 수
+      // 있다.
+      logPipelineStep({
+        stage: "turn-start",
+        character: characterId,
+        round,
+        patienceLevel,
+        userMessage,
+      });
+
       const systemPrompt = buildActorSystemPrompt(
         actorPromptView,
         persona,
@@ -202,15 +224,19 @@ export async function POST(req: NextRequest) {
           { role: "user", content: userMessage },
         ];
 
-        const completion = await client.chat.completions.create({
-          model: NIM_MODEL,
-          max_tokens: 2048,
-          temperature: ACTOR_TEMPERATURE,
-          top_p: 0.95,
-          messages,
-          ...reasoningExtraParams,
-        } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming &
-          typeof reasoningExtraParams);
+        const completion = await withRateLimitRetry(
+          () =>
+            client.chat.completions.create({
+              model: NIM_MODEL,
+              max_tokens: 2048,
+              temperature: ACTOR_TEMPERATURE,
+              top_p: 0.95,
+              messages,
+              ...reasoningExtraParams,
+            } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming &
+              typeof reasoningExtraParams),
+          "interrogate"
+        );
 
         const rawText = completion.choices[0]?.message?.content ?? "";
         return parseActorResponse(rawText).text;
@@ -226,53 +252,36 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      // Phase 66 — quality-check.ts의 로그 함수들이 character를 자체적으로 알 방법이
+      // 없어(단순 유틸 함수라 호출부 문맥을 모른다) logContext로 넘겨준다. interrogate는
+      // 요청 하나에 캐릭터 하나뿐이라 원래도 로그 순서로 구분 가능했지만, accuse의
+      // 디브리핑처럼 여러 캐릭터가 동시에 도는 경로와 로그 포맷을 통일해두면 나중에
+      // 로그를 같이 grep할 때 일관되게 필터링할 수 있다.
+      const logContext = { character: characterId, round };
+
       // 교정본이 원문 의미를 왜곡했는지, 교정으로 텍스트가 실제로 바뀐 경우에만
       // 같은 액터 페르소나를 다시 불러 확인한다(Phase 55, harness에서 검증 후
       // 이번에 프로덕션에 연결). 실패하면 반려된 교정 내용을 알려주고 재교정→재검증을
-      // 최대 MAX_FIDELITY_RETRIES회까지 반복하고, 그래도 실패하면 교정을 포기하고
-      // 원문(sourceText)으로 폴백한다 — harness/chat.ts의 runQualityCheckWithFidelity와
-      // 동일한 로직.
+      // 최대 MAX_FIDELITY_RETRIES회까지 반복하고, 그래도 실패하면 마지막으로 한 번
+      // ESCALATION_MODEL로 교정을 재시도한 뒤(Phase 68) 그것도 실패하면 원문으로
+      // 폴백한다 — 로직 자체는 quality-check.ts의 correctWithFidelityAndEscalation에
+      // 있다(interrogate/accuse/harness 공유).
       async function verifyAndMaybeRetryCorrection(
         sourceText: string,
         initialVerdict: Awaited<ReturnType<typeof runQualityCheck>>
       ): Promise<Awaited<ReturnType<typeof runQualityCheck>>> {
-        let verdict = initialVerdict;
-        if (verdict.finalText.trim() === sourceText.trim()) return verdict;
-
-        for (let attempt = 1; attempt <= MAX_FIDELITY_RETRIES; attempt++) {
-          const fidelity = await verifyCorrectionFidelity(
-            client,
-            NIM_MODEL,
-            systemPrompt,
-            historyMessages,
-            userMessage,
-            sourceText,
-            verdict.finalText,
-            reasoningExtraParams
-          );
-          console.log(
-            `[interrogate] fidelity ${attempt}/${MAX_FIDELITY_RETRIES} character=${characterId} matches=${fidelity.matches} reason=${fidelity.reason}`
-          );
-
-          if (fidelity.matches) return verdict;
-          if (attempt >= MAX_FIDELITY_RETRIES) break;
-
-          const rejected = verdict.finalText;
-          verdict = await runQualityCheck(
-            client,
-            NIM_MODEL,
-            userMessage,
-            sourceText,
-            reasoningExtraParams,
-            rejected
-          );
-          if (verdict.finalText.trim() === sourceText.trim()) return verdict;
-        }
-
-        console.log(
-          `[interrogate] fidelity fallback character=${characterId} — 교정 포기, 원문 사용`
+        return correctWithFidelityAndEscalation(
+          client,
+          NIM_MODEL,
+          ESCALATION_MODEL,
+          systemPrompt,
+          historyMessages,
+          userMessage,
+          sourceText,
+          initialVerdict,
+          MAX_FIDELITY_RETRIES,
+          logContext
         );
-        return { ...verdict, finalText: sourceText };
       }
 
       // 2단계 — 교정+관련성+안전 통합 검수(콜 1개, Phase 53/54). 관련성 실패 시
@@ -283,7 +292,9 @@ export async function POST(req: NextRequest) {
         NIM_MODEL,
         userMessage,
         rawText,
-        reasoningExtraParams
+        reasoningExtraParams,
+        undefined,
+        logContext
       );
       verdict = await verifyAndMaybeRetryCorrection(rawText, verdict);
       let responseText = verdict.finalText;
@@ -297,7 +308,9 @@ export async function POST(req: NextRequest) {
           NIM_MODEL,
           userMessage,
           retryText,
-          reasoningExtraParams
+          reasoningExtraParams,
+          undefined,
+          logContext
         );
         verdict = await verifyAndMaybeRetryCorrection(retryText, verdict);
         responseText = verdict.finalText;
@@ -315,6 +328,13 @@ export async function POST(req: NextRequest) {
       console.log(
         `[interrogate] model=${NIM_MODEL} character=${characterId} persona=${persona.mbtiType} round=${round} elapsedMs=${elapsedMs} patienceLevel=${patienceLevel}/${PATIENCE_MAX} locked=false relevance=${verdict.isRelevant} safety=${verdict.isSafe}`
       );
+      logPipelineStep({
+        stage: "turn-end",
+        character: characterId,
+        round,
+        elapsedMs,
+        finalText: responseText,
+      });
 
       controller.enqueue(
         enc.encode(

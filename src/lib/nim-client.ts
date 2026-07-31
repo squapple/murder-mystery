@@ -77,12 +77,30 @@ export const ACTOR_TEMPERATURE = 0.2;
  * Phase 55 — 교정본이 원문 의미를 왜곡했는지 액터 페르소나를 재호출해 확인하는
  * 재검증 루프(verifyCorrectionFidelity, quality-check.ts)의 최대 재시도 횟수.
  * 1회 vs 5회를 실측 비교하기로 했으나, 하네스 테스트에서 재검증 실패 사례
- * 자체를 거의 못 봐 표본이 부족해 1회로 시작하기로 결정했다(사용자 명시) — 나중에
- * 실전에서 맞춤법/문법 오류가 계속 나오면 이 값을 올려보는 게 첫 번째 시도할
- * 대응이다(먼저 시도할 방향으로 기록해둠). interrogate/route.ts와 harness/chat.ts가
- * 이 상수 하나를 공유한다.
+ * 자체를 거의 못 봐 표본이 부족해 1회로 시작했다(사용자 명시).
+ *
+ * Phase 65 — 실전 배포 후에도 맞춤법/문법 오류가 계속 보고돼, 기록해뒀던 대로
+ * "재시도 횟수를 늘려본다"를 실행에 옮겼다(1 → 3). 파이프라인 단계별 로그
+ * (debug-log.ts)를 함께 붙여서, 3회로 늘렸을 때 실제로 몇 번째 시도에서
+ * 통과하는지·왜 실패하는지를 직접 눈으로 보고 다음 조정 방향을 정하기로 했다.
+ * interrogate/route.ts와 harness/chat.ts가 이 상수 하나를 공유한다.
  */
-export const MAX_FIDELITY_RETRIES = 1;
+export const MAX_FIDELITY_RETRIES = 3;
+
+/**
+ * Phase 68 — 로그 분석으로 "교정 시도(엄마)"가 관용구를 잘못 재현하는 사례를
+ * 발견했다("피가 거리더라고요" → "피가 거꾸리치더라고요", 둘 다 존재하지 않는
+ * 표현). MAX_FIDELITY_RETRIES회를 다 써도(빠른 모델 diffusiongemma로) "아이"가
+ * 계속 반려하면, 마지막 한 번만 이 모델("유치원 선생님")로 교정을 다시 시도한다
+ * — Phase 5에서 유일하게 V1~V4를 전부 흠결 없이 통과했던 deepseek-v4-flash를
+ * "언젠가 문제가 생기면 되돌릴 폴백"으로 이미 남겨뒀었는데, 지금이 그 상황이다.
+ * 다만 전면 교체가 아니라 "교정 시도"에만, 그것도 최후의 한 번만 쓴다 — 느리다는
+ * 단점(55~71초)이 매 턴이 아니라 드문 예외 경로에서만 발생하도록. 이 교정 결과도
+ * 그대로 쓰지 않고 반드시 다시 "아이"(빠른 모델의 verifyCorrectionFidelity)에게
+ * 확인받는다 — 검증 단계 자체는 그대로 빠른 모델을 쓴다(사용자 명시: "2번에만
+ * 쓰고").
+ */
+export const ESCALATION_MODEL = "deepseek-ai/deepseek-v4-flash";
 
 /**
  * deepseek-v4-flash 기준 검증 결과: thinking 켜고 reasoning_effort=high가 유일하게
@@ -110,4 +128,32 @@ export function getReasoningExtraParams(model: string): Record<string, unknown> 
   if (model.startsWith("deepseek-ai/")) return DEEPSEEK_REASONING_PARAMS;
   if (model.startsWith("openai/gpt-oss")) return { reasoning_effort: "medium" };
   return {};
+}
+
+/**
+ * Phase 69 — 실전 플레이 중 NVIDIA NIM 무료 티어 레이트리밋(429)에 걸려 액터
+ * 원본 생성(interrogate의 generateOnce, accuse의 generateDebriefOnce)이 그대로
+ * 실패해 플레이어에게 에러가 노출된 사례가 보고됐다. runQualityCheck·
+ * verifyCorrectionFidelity는 이미 자체 fail-open이 있어 실패해도 대화가 안
+ * 끊기지만, 이 두 원본 생성 콜은 재시도 로직이 없어 429가 그대로 터진다.
+ * 사용자가 같은 문장을 몇 초 뒤 다시 보내니 정상 응답했다고 확인해줘서, 그
+ * 관측을 그대로 코드로 옮겼다 — 429로 실패하면 잠깐(RATE_LIMIT_RETRY_DELAY_MS)
+ * 기다렸다가 딱 1번만 스스로 재시도한다. 그래도 실패하면(레이트리밋이 아니거나
+ * 재시도까지 실패) 그대로 예외를 던져 호출부의 기존 에러 처리에 맡긴다.
+ */
+export const RATE_LIMIT_RETRY_DELAY_MS = 2500;
+
+export async function withRateLimitRetry<T>(fn: () => Promise<T>, logLabel: string): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof OpenAI.RateLimitError) {
+      console.warn(
+        `[${logLabel}] 429 레이트리밋 — ${RATE_LIMIT_RETRY_DELAY_MS}ms 후 1회 재시도`
+      );
+      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_RETRY_DELAY_MS));
+      return await fn();
+    }
+    throw err;
+  }
 }

@@ -23,6 +23,11 @@
 // 포맷 검증→통합 검수(교정/관련성/안전)→교정 신뢰성 재확인까지 동일한 구조로
 // 연결했다. "질문" 자리에는 디브리핑 지시문(buildDebriefDirective)을 그대로 써서
 // 관련성 판정이 자연스럽게 성립하게 했다.
+//
+// Phase 68 — "교정→재확인" 재시도 로직을 quality-check.ts의
+// correctWithFidelityAndEscalation으로 승격(interrogate/accuse/harness 공유). 빠른
+// 모델로 MAX_FIDELITY_RETRIES회를 다 써도 반려되면 마지막 한 번만 ESCALATION_MODEL로
+// 교정을 재시도한다 — interrogate/route.ts 주석 참고.
 
 import { NextRequest, NextResponse } from "next/server";
 import type OpenAI from "openai";
@@ -34,18 +39,21 @@ import {
   getNimClient,
   NIM_MODEL,
   MAX_FIDELITY_RETRIES,
+  ESCALATION_MODEL,
   getReasoningExtraParams,
+  withRateLimitRetry,
 } from "@/lib/nim-client";
 import {
   runQualityCheck,
   isFormatValid,
   SAFETY_FALLBACK_TEXT,
-  verifyCorrectionFidelity,
+  correctWithFidelityAndEscalation,
 } from "@/lib/quality-check";
 import { buildDebriefSystemPrompt, buildDebriefDirective } from "@/lib/prompts/actor-prompt";
 // Phase 33에서 쓰던 polishText/POLISH_MODEL 연동은 Phase 35에서 되돌렸다(interrogate/route.ts
 // 주석 참고) — 나중을 위해 text-polish.ts/POLISH_MODEL 자체는 남겨뒀다. Phase 62부터는
 // 디브리핑도 quality-check.ts(교정+관련성+안전+신뢰성 재확인)를 거친다 — 아래 참고.
+import { logPipelineStep } from "@/lib/debug-log";
 import type { CharacterId } from "@/lib/game-data/types";
 
 // Edge 런타임 되돌림 — 05_history_nan2026.md Phase 18 참고 (interrogate/route.ts와 동일 이유).
@@ -112,6 +120,17 @@ export async function POST(req: NextRequest) {
         // Phase 36 — 이 캐릭터를 한 번도 심문하지 않고 지목까지 갔을 때, 디브리핑이
         // "그때 CCTV 얘기 던지실 때" 같은 있지도 않은 대화를 지어내던 문제를 고쳤다.
         const wasInterrogated = history.length > 0;
+
+        // Phase 66 — quality-check.ts 내부 로그(runQualityCheck/verifyCorrectionFidelity)
+        // 만으로는 이 디브리핑이 어느 캐릭터 것인지 구분이 안 됐다(3명이 Promise.all로
+        // 동시에 돌아가므로) — interrogate/route.ts의 turn-start/turn-end와 동일하게
+        // character 컨텍스트를 감싸는 마커를 추가했다.
+        logPipelineStep({
+          stage: "debrief-start",
+          character: id,
+          isAccused: id === accusedCharacterId,
+          wasInterrogated,
+        });
         const systemPrompt = buildDebriefSystemPrompt(
           getActorPromptView(character),
           persona,
@@ -136,14 +155,18 @@ export async function POST(req: NextRequest) {
             { role: "user", content: directive },
           ];
 
-          const completion = await client.chat.completions.create({
-            model: NIM_MODEL,
-            max_tokens: 1024,
-            temperature: 1,
-            top_p: 0.95,
-            messages,
-            ...reasoningExtraParams,
-          } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming & typeof reasoningExtraParams);
+          const completion = await withRateLimitRetry(
+            () =>
+              client.chat.completions.create({
+                model: NIM_MODEL,
+                max_tokens: 1024,
+                temperature: 1,
+                top_p: 0.95,
+                messages,
+                ...reasoningExtraParams,
+              } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming & typeof reasoningExtraParams),
+            "accuse"
+          );
 
           return (completion.choices[0]?.message?.content ?? "").trim();
         }
@@ -159,38 +182,41 @@ export async function POST(req: NextRequest) {
           );
         }
 
+        // Phase 66 — 3명의 디브리핑이 Promise.all로 동시에 도는데, quality-check.ts의
+        // 로그 함수는 자체적으로 어느 캐릭터인지 알 방법이 없다(순수 유틸 함수) — 이
+        // logContext 없이는 3명분 quality-check/fidelity-check 로그가 뒤섞여서 구분이
+        // 안 됐다(실측 확인, debrief-start/end만으로는 안 됨).
+        const logContext = { character: id };
+
         // "질문" 자리에는 디브리핑을 요청한 지시문(directive)을 그대로 쓴다 — 관련성
         // 판정이 "이 소감이 방금 받은 지시(소감을 말해달라)에 실제로 응답했는가"를
         // 볼 수 있게 하기 위함.
-        let verdict = await runQualityCheck(client, NIM_MODEL, directive, rawText, reasoningExtraParams);
+        let verdict = await runQualityCheck(
+          client,
+          NIM_MODEL,
+          directive,
+          rawText,
+          reasoningExtraParams,
+          undefined,
+          logContext
+        );
 
         async function verifyAndMaybeRetryCorrection(
           sourceText: string,
           initialVerdict: Awaited<ReturnType<typeof runQualityCheck>>
         ): Promise<Awaited<ReturnType<typeof runQualityCheck>>> {
-          let v = initialVerdict;
-          if (v.finalText.trim() === sourceText.trim()) return v;
-
-          for (let attempt = 1; attempt <= MAX_FIDELITY_RETRIES; attempt++) {
-            const fidelity = await verifyCorrectionFidelity(
-              client,
-              NIM_MODEL,
-              systemPrompt,
-              historyMessages,
-              directive,
-              sourceText,
-              v.finalText,
-              reasoningExtraParams
-            );
-            if (fidelity.matches) return v;
-            if (attempt >= MAX_FIDELITY_RETRIES) break;
-
-            const rejected = v.finalText;
-            v = await runQualityCheck(client, NIM_MODEL, directive, sourceText, reasoningExtraParams, rejected);
-            if (v.finalText.trim() === sourceText.trim()) return v;
-          }
-
-          return { ...v, finalText: sourceText };
+          return correctWithFidelityAndEscalation(
+            client,
+            NIM_MODEL,
+            ESCALATION_MODEL,
+            systemPrompt,
+            historyMessages,
+            directive,
+            sourceText,
+            initialVerdict,
+            MAX_FIDELITY_RETRIES,
+            logContext
+          );
         }
 
         verdict = await verifyAndMaybeRetryCorrection(rawText, verdict);
@@ -200,7 +226,15 @@ export async function POST(req: NextRequest) {
           const retryText = await generateDebriefOnce(
             "[재생성 지시] 방금 소감이 요청받은 내용(방금까지의 심문을 돌아보며 소감을 나누는 것)에서 벗어났다. 다시 답하라."
           );
-          verdict = await runQualityCheck(client, NIM_MODEL, directive, retryText, reasoningExtraParams);
+          verdict = await runQualityCheck(
+            client,
+            NIM_MODEL,
+            directive,
+            retryText,
+            reasoningExtraParams,
+            undefined,
+            logContext
+          );
           verdict = await verifyAndMaybeRetryCorrection(retryText, verdict);
           finalText = verdict.finalText;
         }
@@ -208,6 +242,12 @@ export async function POST(req: NextRequest) {
         if (!verdict.isSafe) {
           finalText = SAFETY_FALLBACK_TEXT;
         }
+
+        logPipelineStep({
+          stage: "debrief-end",
+          character: id,
+          finalText,
+        });
 
         debriefsById.set(id, finalText);
       } catch (err) {

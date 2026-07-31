@@ -877,3 +877,68 @@ Phase 58 직후 재검토하다가, 새 "심문 효율"(낭비성 반복 적을�
 
 - **Technical Rationale (리뷰를 곧이곧대로 안 믿고 재현부터 한 이유)**:
   - 리뷰 자체가 실제로는 다른 AI 에이전트가 브라우저 자동화로 플레이한 결과라, "관측된 현상"과 "그 현상의 실제 원인"이 다를 수 있다고 판단했다(실제로 Enter 키 건은 게임 버그가 아니라 자동화 도구의 한계였다). 코드를 절대 안 고치는 것도, 리뷰를 곧이곧대로 다 고치는 것도 아니라, 주장 하나하나를 독립적으로 재현 가능한 실측으로 판정한 뒤 실제 확인된 것만 고치는 방식을 택했다.
+
+## Phase 63: "수사 성실도" 문구 재수정 (Completed)
+
+Phase 61에서 "용의자들의 소지품을 확인할 때마다"로 일반화했는데, 사용자가 "직접 획득한 유의미한 증거물의 개수에 따라 점수가 쌓입니다."로 다시 바꿔달라고 요청했다.
+
+- **"유의미한"의 정확한 뜻 확인**: 처음엔 "핵심 단서 확보"(사건 해결 기여도)와 겹치는 단어로 보여 사용자에게 되물었다. 사용자 설명: "유의미한"은 중요도가 아니라 "시스템에 실제로 정의된 증거 항목이냐"는 뜻이다 — 예를 들어 "안경 보여주세요"처럼 `requestableItems`에 없는 임의의 물건을 요청하면 아무 증거도 해금되지 않아 점수에 안 잡히는 것과 대비되는 개념. 이 설명을 듣고 그대로 반영했다(`CastingScreen.tsx`).
+- **검증**: `npm run lint`/`npx tsc --noEmit`/`npm run build` 통과. 커밋 `c253e08`, 배포 완료(Version `f09bc082`).
+
+## Phase 64-65: 사건 콘텐츠 보강(산책로 흙 감식/사망 장소/김영훈 휴대폰/타임라인 정확화) + 파이프라인 디버그 로그 신설 (In Progress)
+
+사용자가 스토리 콘텐츠 7가지를 한 번에 요청했다 — 그중 6개는 조사 모드/캐릭터 데이터 보강, 마지막 1개는 원문→교정→검증 파이프라인을 직접 눈으로 볼 수 있는 로그 인프라 구축이었다.
+
+- **[신규 물증] 산책로 흙 성분 감식** (`ev-trail-soil-analysis`, round1_base): 산책로 흙이 다른 구역과 성분이 뚜렷이 구별된다는 사실 자체가 어디에도 없어서, 나중에 나오는 신발 흙 성분 일치(`ev-shoe-lee`)가 왜 결정적 증거가 되는지의 전제가 빠져 있었다는 지적 — 국과수 감식 결과로 중립적으로 제시(결론은 내리지 않음).
+- **[보강] 사망추정시각 카드에 장소 추가**: `ev-time-of-death`의 revealedFact/detail에 "산책로에서"를 명시(기존에도 CASE_OVERVIEW.location으로 알려진 정보라 새 사실은 아님).
+- **[삭제] 박서연 신발 카드의 해석성 문구 삭제**: "사건과는 무관해 보인다."는 결론을 카드가 대신 내려주는 문장이라 삭제(Phase 42의 "그래서 신발에 흙이 묻어도 이상하지 않다" 삭제와 같은 원칙).
+- **[신규 물증] 김영훈 휴대폰 확인** (`ev-victim-phone-log`, round1_end): 박서연/이현우 각자의 휴대폰은 "내가 보낸" 기록만 보여줘 대조가 필요했는데, 피해자 본인 휴대폰에 양쪽 기록(21:05 박서연 문자 수신, 21:10 이현우와 통화, 21:30 박서연 부재중 전화, 21:50 이현우 문자 수신)을 시간순으로 모아 대조하기 쉽게 정리했다. id를 `ev-phone-`가 아니라 `ev-victim-phone-log`로 지어 scoring.ts의 "수사 성실도"(`ev-phone-` 접두어 필터) 집계에 실수로 안 잡히게 했다 — 심문 요청이 아니라 현장에서 자동 확보되는 물증이라 그 카테고리와 무관해야 한다.
+- **[보강] 이현우 동기 진술에 정확한 시기 추가**: `stmt-lee-family-history`("전 직장 동료의 증언")에 "2년 전" 여동생 사망, "3개월도 채 지나지 않아" 재혼을 명시하고, 뭉뚱그려져 있던 "사망보험금이나 재혼이 유독 빨랐다는 정황" 문구는 사망보험금 부분만 "꽤 큰 사망보험금을 수령했다는 이야기가 돈다"는 소문 수준으로 남기고 재혼 시기는 구체적 사실로 분리했다. `characters.ts`의 `motiveFull`/`knownSecrets`(ai_only)도 동일 시기로 맞췄다.
+- **[보강] 정민아 동기 진술에 정확한 시기 추가**: `stmt-jeong-breakup-reason`("팀원 C의 증언")에 "2년 전부터" 연인 관계, "1년 전" 임신, "10개월 전" 유산을 명시(과정의 세부는 여전히 "아는 사람이 없다"로 남김). `motiveFull`/`knownSecrets`도 동일 시기로 통일.
+- **[인프라] `src/lib/debug-log.ts` 신설**: "메시지가 나가기까지의 과정(원문→교정→검증)을 보고 싶다"는 요청 — `logPipelineStep()`이 JSON Lines 형식으로 `logs/quality-pipeline.log`에 기록한다. `quality-check.ts`의 `runQualityCheck`/`verifyCorrectionFidelity` 내부에 로깅을 심어 모든 호출 경로(harness/interrogate/accuse)가 자동으로 기록되게 했고, `interrogate/route.ts`에는 `turn-start`/`turn-end` 마커를 추가로 심어 한 턴에 속한 로그들을 시간순으로 쉽게 묶어볼 수 있게 했다. Cloudflare Workers는 `nodejs_compat` 플래그로 `node:fs`가 폴백 제공되긴 하지만 진짜 디스크가 아니라 격리된 인스턴스 안에서만 사는 휘발성 구현이라, 실제로 로그를 눈으로 보려면 `npm run dev`로 로컬에서 돌려야 한다(사용자도 "당분간은 로컬에서 실행해도 된다"고 명시) — 배포해도 크래시는 안 나지만(try/catch로 감쌈, 빌드도 정상 통과 확인) 별 의미 없는 공회전이 된다.
+- **[조정] `MAX_FIDELITY_RETRIES` 1 → 3**: Phase 55에서 남겨둔 "나중에 문제가 계속되면 재시도 횟수를 올려본다"는 방침을 실행 — 로그로 실제 재시도 양상을 보면서 다음 조정 방향을 정하기로 했다.
+- **검증**: `npm run lint`/`npx tsc --noEmit`/`npm run build`/`npm run harness:lint`/`npx opennextjs-cloudflare build`(Cloudflare 번들 빌드도 별도 확인) 전부 통과. 로컬 `npm run dev`로 실제 심문 요청 2건을 보내 `logs/quality-pipeline.log`에 `turn-start`→`quality-check`→`turn-end` 3줄이 정확한 순서·내용으로 쌓이는 것을 확인했다.
+
+- **Technical Rationale (로깅을 quality-check.ts 내부에 심은 이유)**:
+  - route.ts/harness/accuse 세 호출부에 각각 로깅을 추가하는 대신, 공유 함수(`runQualityCheck`/`verifyCorrectionFidelity`) 내부에 한 번만 심어 세 경로 모두 자동으로 같은 로그를 남기게 했다 — 호출부가 늘어나도 로깅 누락 위험이 없다.
+
+## Phase 66: 디브리핑 로그에 캐릭터 컨텍스트 태깅 (In Progress)
+
+Phase 65에서 만든 로그가 인터로게이트에는 `character` 필드가 잘 붙는데, 디브리핑(accuse/route.ts)은 3명이 `Promise.all`로 동시에 도는 구조라 quality-check/fidelity-check 로그 줄만 봐서는 어느 캐릭터 것인지 구분이 안 된다는 걸 사용자 질문("마지막 후기도 다 저장이 되고?")에 답하다가 재확인했다.
+
+- **`debrief-start`/`debrief-end` 마커 추가**(`accuse/route.ts`): interrogate의 `turn-start`/`turn-end`와 동일한 패턴으로 `character`/`isAccused`/`wasInterrogated`를 남긴다.
+- **`runQualityCheck`/`verifyCorrectionFidelity`에 `logContext` 매개변수 추가**(`quality-check.ts`): 각 함수가 남기는 모든 로그 줄에 `...logContext`를 스프레드해 넣는다 — 함수 자체는 호출부 문맥을 모르는 순수 유틸이라, 호출부(interrogate/accuse/harness)가 `{character: ...}`를 넘겨줘야 한다. 세 호출부 전부 갱신했다.
+- **검증**: 로컬 `npm run dev`로 `/api/accuse` 실제 호출 — 이전엔 `quality-check`/`fidelity-check` 로그 5줄 중 어느 것도 character가 없었는데, 수정 후 10줄 전부(`debrief-start` 3, `quality-check` 3, `fidelity-check` 1, `debrief-end` 3) 정확한 character 태그가 붙는 것을 확인했다. `npm run lint`/`npx tsc --noEmit`/`npm run build`/`npm run harness:lint` 전부 통과.
+- **커밋/배포는 보류** — 사용자가 "먼저 로컬로 몇 번 실행해보고 로그를 검토해보자"고 명시적으로 요청, 아직 커밋하지 않은 로컬 변경 상태.
+
+## Phase 67: 교정 지시문에 "문장 중간" 조사/어미 탈락 카테고리 추가 (Completed)
+
+로그 분석(Phase 65 인프라로 쌓인 실전 로그)으로, 최종적으로 나간 텍스트에 조사·어미 탈락 오류 4건이 그대로 살아남아 있는 것을 발견했다("나가는 보길래", "제가 왜 거기까지 갔겠가요", "죽고 지 3개월", "말씀드릴 사까지는"). 각 사례를 quality-check 로그로 추적한 결과, 검수 모델이 이 문장들을 실제로 보고도 changed:false(고칠 게 없음)로 판정했다는 게 확인됐다 — 배선 문제가 아니라 교정 지시문 자체에 "문장 중간"의 조사/어미 탈락 유형이 아예 없었던 것(기존 (d)항은 "문장 끝"의 종결어미 탈락만 다뤘다).
+
+- **[수정] `buildQualityCheckPrompt`에 (e)항목 추가**(`quality-check.ts`): 실제 관측된 4개 사례를 그대로 예시로 제시.
+- **검증**: 4개 사례를 재테스트해 3/4(나가는 보길래, 갔겠가요, 죽고 지 3개월)는 정확히 고쳐지는 것을 확인. 나머지 1건("피가 거리더라고요"라는 관용구가 깨진 사례, "죽고 지"와 같은 문장 안에 있었음)은 "이상하다"는 건 잡아내지만("거꾸리치더라고요" 등 존재하지 않는 대체 표현으로 재구성) 정확히 못 고침 — Phase 70에서 마저 해결.
+
+## Phase 68: 교정→재확인 재시도 로직 통합 + 최종 에스컬레이션 모델 도입 (Completed)
+
+interrogate/accuse/harness 세 호출부가 "교정(엄마)→재확인(아이)→반려 시 재교정" 루프를 각자 거의 동일하게 중복 구현하고 있어 로직 불일치 위험이 있었다 — 하나로 승격했다.
+
+- **[신규] `correctWithFidelityAndEscalation`**(`quality-check.ts`): 세 호출부가 공유. `MAX_FIDELITY_RETRIES`회를 다 써도 빠른 모델(diffusiongemma)이 계속 반려되면, 마지막 한 번만 `ESCALATION_MODEL`(deepseek-v4-flash, thinking:high)로 교정을 재시도하고, 그 결과도 예외 없이 다시 빠른 모델의 재확인을 거친다(사용자 명시: "재확인은 2번에만 쓰고").
+- **검증**: 로그에서 발견한 관용구 사례("피가 거리더라고요"→"거꾸리치더라고요"가 3회 연속 반려)를 그대로 재현해 에스컬레이션 경로가 실제로 발동하는 것을 확인. 다만 이 테스트에서 에스컬레이션 모델이 빈 응답(`empty-response-fallback`)을 반환해 전체가 원문으로 폴백되는 문제를 발견 — 원인 조사 결과 프롬프트 복잡도에 따라 응답이 극단적으로 느려지는 현상(수 분 이상)으로 추정되며, 실사용 빈도(3회 연속 반려까지 가는 경우 자체가 드묾)를 고려해 당장은 보류.
+
+## Phase 69: NVIDIA NIM 429 레이트리밋 자동 재시도 (Completed)
+
+실전 배포 플레이 중 429(레이트리밋)로 액터 원본 생성(`generateOnce`)/디브리핑 생성(`generateDebriefOnce`)이 그대로 실패해 플레이어에게 에러가 노출된 사례가 보고됐다. `runQualityCheck`/`verifyCorrectionFidelity`는 이미 자체 fail-open이 있어 429가 나도 대화가 안 끊기지만, 이 두 원본 생성 콜은 재시도 로직이 없어 429가 그대로 터졌다. 사용자가 "같은 문장을 몇 초 뒤 다시 보내니 정상 응답했다"고 확인해줘서 그 관측을 그대로 코드화했다.
+
+- **[신규] `withRateLimitRetry`**(`nim-client.ts`): 429(`OpenAI.RateLimitError`)만 잡아 `RATE_LIMIT_RETRY_DELAY_MS`(2.5초) 대기 후 1회 재시도, 그 외 오류나 재시도 후에도 실패하면 그대로 던진다.
+- interrogate/accuse/harness 세 곳의 원본 생성 콜을 이 헬퍼로 감쌌다.
+- **검증**: 실제 429는 무료 티어라 의도적으로 재현하기 어려워, 목(mock) 오류로 로직만 검증 — 429 시 정확히 2.5초 후 1회 재시도해 성공하는 것, 그 외 오류는 재시도 없이 즉시 던지는 것을 확인. `npx tsc --noEmit` 통과.
+
+## Phase 70: 관용구 교정 예시 목록 분리 관리 + "피가 거리더라고요" 사례 추가 (Completed)
+
+Phase 67에서 못 고쳤던 관용구 사례("피가 거리더라고요")를 마저 해결하기 전에, "엄마(교정 단계)의 temperature를 낮추면/올리면 이 사례를 잡아낼 수 있을까"를 먼저 실측했다.
+
+- **temperature 실험**: 이미 0이었던 교정 콜의 temperature를 1, 0.5로 올려가며 4개 실전 사례(그중 하나가 이 관용구)를 각 3~5회씩 재현 테스트. 결과: temperature=1에서는 원래 잘 고쳐지던 사례("말씀드릴 사까지는")에서 오히려 3회 중 1회 놓치는 비일관성이 새로 생겼고, temperature=0.5는 그 비일관성은 없었지만 관용구 사례는 0/0.5/1 어느 온도에서도(총 8회 시도) 단 한 번도 정확히 고치지 못했다("거슬리더라고요" 등 또 다른 틀린 말을 반복 생성) — 무작위성 문제가 아니라 모델이 정확한 관용구 자체를 모른다고 판단, temperature 조정은 포기.
+- 관용구 전용 RAG 구축도 검토했으나, 지금까지 확인된 사례가 이 1건뿐이라 임베딩/유사도 매칭 인프라를 새로 만드는 건 과한 투자라고 판단 — Phase 67과 같은 방식(예시 직접 제공)으로 해결하기로 함.
+- **[신규] `src/lib/correction-examples.ts`**: 교정 지시문 (e)항목의 예시 목록을 거대한 프롬프트 문자열에서 분리해 `CorrectionExample[]` 배열로 관리(앞으로 새 사례를 발견하면 이 배열에 항목만 추가하면 됨). `renderCorrectionExamples()`가 프롬프트 텍스트로 렌더링.
+- "피가 거리더라고요"(관용구가 깨짐) → "피가 거꾸로 솟더라고요" 예시를 이 배열에 추가.
+- **검증**: 실제 프로덕션 `runQualityCheck`(temperature=0)로 3회 재시도 — "죽은 지"와 "피가 거꾸로 솟더라고요" 둘 다 3/3 정확히 고쳐지는 것을 확인. `npx tsc --noEmit` 통과.

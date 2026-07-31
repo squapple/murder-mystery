@@ -1,0 +1,39 @@
+// Phase 70 — quality-check.ts의 교정 지시문 (e)항목("문장 중간" 조사/어미 탈락,
+// 깨진 관용구 등)은 실전 로그에서 발견되는 구체적 사례를 예시로 박아넣어야 모델이
+// 잡아낸다(Phase 67에서 확인). 새 사례를 발견할 때마다 거대한 프롬프트 문자열을
+// 직접 헤집지 않고 이 배열에 항목만 추가하면 되도록 분리했다.
+export interface CorrectionExample {
+  /** 오류가 있는 실제 원문 표현 */
+  wrong: string;
+  /** 올바른 표현. 후보가 여럿이면 배열에 다 적는다(예: "갔겠어요"/"갔겠습니까"). */
+  correct: string[];
+  /** 어떤 유형의 결함인지 짧은 설명 */
+  note: string;
+}
+
+export const CORRECTION_EXAMPLES: CorrectionExample[] = [
+  { wrong: "나가는 보길래", correct: ["나가는 걸 보길래"], note: '조사 "걸" 탈락' },
+  {
+    wrong: "제가 왜 거기까지 갔겠가요",
+    correct: ["갔겠어요", "갔겠습니까"],
+    note: "어미 오기",
+  },
+  { wrong: "죽고 지 3개월", correct: ["죽은 지"], note: "조사 오기" },
+  { wrong: "말씀드릴 사까지는", correct: ["말씀드릴 사안까지는"], note: "음절 탈락" },
+  // Phase 70 — "피가 거리더라고요"(존재하지 않는 표현)로 깨진 사례. temperature를
+  // 0/0.5/1로 바꿔가며 8차례 테스트했지만 매번 실패(미수정 또는 "피가 거슬리더라고요"
+  // 등 또 다른 틀린 말로 재생성)해, 모델이 온도와 무관하게 정확한 관용구 자체를
+  // 모른다고 판단 — "죽고 지"와 같은 방식(예시 직접 제공)으로 해결한다.
+  {
+    wrong: "피가 거리더라고요",
+    correct: ["피가 거꾸로 솟더라고요"],
+    note: "관용구가 깨짐(원래 관용구: 피가 거꾸로 솟다)",
+  },
+];
+
+/** 교정 지시문의 "예: ..." 절에 그대로 붙일 수 있는 형태로 렌더링한다. */
+export function renderCorrectionExamples(): string {
+  return CORRECTION_EXAMPLES.map(
+    (e) => `"${e.wrong}"(${e.note}, 올바르게는 ${e.correct.map((c) => `"${c}"`).join("/")})`
+  ).join(", ");
+}
