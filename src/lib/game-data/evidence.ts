@@ -77,6 +77,12 @@ export interface EvidenceItem {
    * 짧은 headline, detail은 실제 서사가 담긴 상세로 역할을 분리했다(Phase 35).
    */
   detail?: string;
+  /**
+   * Phase 74 — 사용자가 직접 제작한 증거품 이미지(`public/evidence/`)를 카드 썸네일 +
+   * 확대 모달에 표시한다. `/evidence/파일명.png` 형태의 public 경로. 없으면(undefined)
+   * 이미지 없이 텍스트만 표시된다 — 전체 증거 중 이미지가 준비된 항목만 채운다.
+   */
+  image?: string;
 }
 
 export const EVIDENCE: EvidenceItem[] = [
@@ -91,6 +97,7 @@ export const EVIDENCE: EvidenceItem[] = [
     detail:
       "부검 소견: 어깨와 옆구리 부위에 예리한 흉기에 의한 자상 다수 확인. 직접 사인은 과다출혈. 위 내용물 소화 정도를 근거로 사망 추정 시각은 21:45경으로 특정됐다. 시신은 산책로에서 발견됐고, 부검 결과로도 실제 사망 장소가 그 부근으로 추정된다. 흉기 자체는 현장에서 발견되지 않았다.",
     revealTiming: "round1_base",
+    image: "/evidence/body_kyh.png",
   },
   {
     // Phase 64 — "산책로 흙이 특이하다"는 사실 자체가 어디에도 없어, 이후 신발
@@ -124,8 +131,10 @@ export const EVIDENCE: EvidenceItem[] = [
     category: "physical",
     name: "당일 프로그램 일정표",
     revealedFact: "사건 발생 당일 워크숍 프로그램 일정 확인",
+    // Phase 74 — 사용자 요청으로 "산책로 탐방"을 낮 일정에서 뺐다. 오전 연수원 도착
+    // 및 숙소 배정, 점심, 오후 강사 특강, 자유시간 순으로 재구성.
     detail:
-      "그날 진행된 프로그램 일정표가 확인됐다 — 오전 초청 강사 특강, 점심 식사, 오후 산책로 탐방, 이후 자유시간 순으로 짜여 있었다.",
+      "그날 진행된 프로그램 일정표가 확인됐다 — 오전 연수원 도착 및 숙소 배정, 점심 식사, 오후 초청 강사 특강, 이후 자유시간 순으로 짜여 있었다.",
     revealTiming: "round1_base",
   },
   {
@@ -136,6 +145,7 @@ export const EVIDENCE: EvidenceItem[] = [
     detail:
       "박서연이 21:10경 편의점에서 결제한 기록이 확인됐다 — 다만 그 이후 정확히 언제 회식 자리로 돌아왔는지는 증명되지 않아, 사망 추정 시각(21:45) 전후의 행적까지 확실히 증명해주지는 못한다.",
     revealTiming: "round1_end",
+    image: "/evidence/receipt.png",
   },
   {
     // Phase 40: 정민지의 "법인카드 비리 목격" 서브플롯을 대체 — 그날 밤 심란해 보인
@@ -178,14 +188,18 @@ export const EVIDENCE: EvidenceItem[] = [
     // 아니라 "그런 소문/정황이 있다"는 수준으로만 서술해, 진위를 게임이 판정하지
     // 않는다. Phase 42: round1_end로 앞당김(2라운드부터 노출).
     // Phase 64 — 사용자 요청으로 정확한 시기를 추가했다: 여동생 사망 2년 전, 김영훈
-    // 재혼 그로부터 3개월 후. "재혼이 유독 빨랐다는 정황"처럼 뭉뚱그린 표현 대신
-    // 구체적 기간을 명시하고, 사망보험금 부분만 소문 수준으로 남겼다.
+    // 재혼 그로부터 3개월 후.
+    // Phase 74 — 사용자 요청으로 다시 간결화: 사망보험금 소문·"이현우가 어떻게
+    // 받아들이는지 알려지지 않았다" 문장을 뺐다(이현우가 김영훈을 의심하는 심증은
+    // 이제 그의 본인 데이터로만 존재 — characters.ts 참고, 목격담 카드는 순수 사실만
+    // 담는다는 원칙과 더 잘 맞는다). "동료가 전해 들은 얘기를 경찰에게 진술하는
+    // 톤"으로 두 사실(혼인 관계, 재혼 시기)만 남겼다.
     id: "stmt-lee-family-history",
     category: "statement",
     name: "전 직장 동료의 증언",
     revealedFact: "이현우의 가족사에 대한 이야기",
     detail:
-      "이현우에게 여동생이 있었고, 예전에 피해자 김영훈과 결혼했었다는 걸 아는 사람이 있다. 그런데 2년 전, 결혼 후 얼마 안 가 여동생이 세상을 떠났고, 자살로 처리됐다는 이야기가 있다. 김영훈은 그로부터 3개월도 채 지나지 않아 재혼했다. 꽤 큰 사망보험금을 수령했다는 이야기도 함께 도는데, 전부 확인된 사실은 아니고 소문 수준이다. 이현우 본인이 이 일을 어떻게 받아들이고 있는지는 알려져 있지 않다.",
+      "이현우에게 여동생이 있었고, 예전에 피해자 김영훈과 결혼했었다는 걸 아는 사람이 있다. 결혼 후 얼마 안 가 여동생이 세상을 떠나며(자살로 처리됨) 그 혼인은 끝났는데, 김영훈은 그로부터 3개월도 채 지나지 않아 재혼했다는 이야기가 있다. 그게 2년 전이었다.",
     revealTiming: "round1_end",
   },
   {
@@ -230,6 +244,7 @@ export const EVIDENCE: EvidenceItem[] = [
     detail:
       "박서연 숙소(202호) 베란다 화분 뒤에서 칼 한 자루가 발견됐다. 표면에 남은 혈흔을 감식한 결과 피해자 김영훈의 혈액형 및 DNA와 일치했다.",
     revealTiming: "round3_open",
+    image: "/evidence/knife.png",
   },
   {
     // Phase 41 — 신발 증거의 근거를 "이슬/습기"에서 "빗물"로 교체했다. 흙 성분
@@ -251,6 +266,7 @@ export const EVIDENCE: EvidenceItem[] = [
     // Phase 40: 진범을 실제로 특정하는 데 기여하는 결정적 정황이라 "증거 수집" 채점
     // 대상으로 삼는다(Phase 38 원칙 계승).
     scorable: true,
+    image: "/evidence/shoes_lhw.png",
   },
   {
     // Phase 41: 박서연의 신발 설명을 단순화 — 그냥 "비에 젖어서 슬리퍼를 헹궈냈다"는
@@ -262,6 +278,7 @@ export const EVIDENCE: EvidenceItem[] = [
     detail:
       "신발에 산책로 흔적이 전혀 없다 — 그날 밤 비가 와서 슬리퍼에 흙탕물이 좀 튀었었는데, 물로 대충 헹궈냈을 뿐이라고 설명한다.",
     revealTiming: "action_triggered",
+    image: "/evidence/shoes_psy.png",
   },
   {
     // Phase 40: 평범한 대조군 — 별다른 의미 없이 막다른 길로 남는다.
@@ -271,6 +288,7 @@ export const EVIDENCE: EvidenceItem[] = [
     revealedFact: "정민지 신발 확인 — 평범한 흙만 검출",
     detail: "평범한 흙만 묻어있다 — 그 이상 나올 게 없다.",
     revealTiming: "action_triggered",
+    image: "/evidence/shoes_jmj.png",
   },
   {
     // 가방 조사(Phase 39 신규 메커니즘) — 3인 전원, 심문 중 "가방 좀 보여달라" 자유문
@@ -285,6 +303,7 @@ export const EVIDENCE: EvidenceItem[] = [
       "로프, 카라비너 2개, 접이식 등산스틱, 헤드랜턴 — 그 외 세면도구, 여벌 와이셔츠, 상비약, 충전기 등 평범한 소지품들이 들어 있다.",
     revealTiming: "action_triggered",
     scorable: true,
+    image: "/evidence/bag_lhw.png",
   },
   {
     id: "ev-bag-park",
@@ -293,6 +312,7 @@ export const EVIDENCE: EvidenceItem[] = [
     revealedFact: "박서연 가방 내용물 확인",
     detail: "화장품 파우치, 보조배터리, 여벌 옷, 개인 수첩, 편의점 영수증 등이 들어 있다.",
     revealTiming: "action_triggered",
+    image: "/evidence/bag_psy.png",
   },
   {
     // Phase 56 — 정민지의 임신/유산 서브플롯(stmt-jeong-breakup-reason에서는 뭉뚱그려서만
@@ -305,6 +325,7 @@ export const EVIDENCE: EvidenceItem[] = [
     revealedFact: "정민지 가방 내용물 확인",
     detail: "업무 수첩, 이어폰, 핸드크림, 두통약, 그리고 아기 옷 한 벌이 들어 있다.",
     revealTiming: "action_triggered",
+    image: "/evidence/bag_jmj.png",
   },
   {
     // Phase 64 — 김영훈 본인의 휴대폰 기록을 새로 추가했다(사용자 요청). 박서연/
@@ -322,6 +343,7 @@ export const EVIDENCE: EvidenceItem[] = [
     detail:
       "그날 밤 시간순 기록이 남아있다. 21:05 박서연에게서 문자(\"팀장님 잠깐 이야기 좀 하시죠\") 수신. 21:10 이현우와 통화(응답함). 21:30 박서연에게서 걸려온 전화 부재중. 21:50 이현우에게서 문자(\"다음에 얘기하자\") 수신. 그 외 특이한 기록은 없다.",
     revealTiming: "round1_end",
+    image: "/evidence/phone.png",
   },
   {
     // Phase 42 — 옛 "김영훈 휴대폰 통화·문자 내역"(공용 물증, round2_end)을 대체.
@@ -334,6 +356,7 @@ export const EVIDENCE: EvidenceItem[] = [
     detail:
       "21:05에 김영훈에게 보낸 문자(\"팀장님 잠깐 이야기 좀 하시죠\")와 21:30에 걸었던 부재중 전화 기록이 남아있다. 그 외 특이한 내용은 없다.",
     revealTiming: "action_triggered",
+    image: "/evidence/phone.png",
   },
   {
     // Phase 42: 이현우 본인의 휴대폰 — 그가 김영훈을 불러낸 통화와 위장 문자 둘 다
@@ -347,6 +370,7 @@ export const EVIDENCE: EvidenceItem[] = [
       "21:10에 김영훈과 통화한 기록과, 21:50에 보낸 문자(\"다음에 얘기하자\")가 남아있다. 통화 내용 자체는 남아있지 않다.",
     revealTiming: "action_triggered",
     scorable: true,
+    image: "/evidence/phone.png",
   },
   {
     id: "ev-phone-jeong",
@@ -355,6 +379,7 @@ export const EVIDENCE: EvidenceItem[] = [
     revealedFact: "정민지 휴대폰 확인",
     detail: "특별히 눈에 띄는 통화나 문자 기록은 없다.",
     revealTiming: "action_triggered",
+    image: "/evidence/phone.png",
   },
 ];
 

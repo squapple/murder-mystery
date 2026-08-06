@@ -22,3 +22,27 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Phase 74 — 사용자 제공 배경 이미지(public/background.png)를 게임 전체 배경으로
+   깐다. 원본 그대로 쓰면 UI 텍스트 위에서 너무 튀어서, (1) filter로 어둡게,
+   (2) opacity로 흐릿하게, (3) ::after의 radial-gradient로 가장자리를 body 배경색
+   (#0a0a0a)으로 자연스럽게 페이드아웃시켜 검정 패널들과 그라데이션처럼 어우러지게
+   했다. position: fixed라 스크롤해도 배경은 고정된다. */
+.app-background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("/background.png");
+  background-size: cover;
+  background-position: center;
+  filter: brightness(0.65) saturate(0.9);
+  opacity: 0.75;
+}
+
+.app-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 0%, rgba(10, 10, 10, 0.55) 60%, var(--background) 100%);
+}

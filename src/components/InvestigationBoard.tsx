@@ -54,25 +54,42 @@ export default function InvestigationBoard({
   /** 물증/진술 공통 카드 렌더러 — Phase 35: 진술 증거도 물증과 동일하게 클릭해야
    * 확보(✓)되도록 통일했다(이전엔 진술 증거가 라운드 전환 시 자동 확보돼, 카드를
    * 클릭하는 행위 자체가 무의미했다는 지적을 반영). */
+  // Phase 74 — 이미지가 붙은 카드와 안 붙은 카드가 섞이면서, 텍스트 길이에 따라
+  // 카드 높이가 들쭉날쭉해져 그리드가 지저분해 보인다는 지적(사용자) — 카드 자체를
+  // 고정 높이(h-24)로 못박고, 이름은 1줄(truncate)·설명은 최대 2줄(line-clamp-2)로
+  // 넘치는 텍스트를 늘어나게 두지 않고 말줄임표로 잘라낸다.
   function renderCard(e: EvidenceItem) {
     const collected = collectedIds.has(e.id);
     return (
       <button
         key={e.id}
         onClick={() => handleCardClick(e, collected)}
-        className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+        className={`h-24 overflow-hidden rounded-md border px-3 py-2 text-left text-sm transition-colors ${
           collected
             ? "border-emerald-800 bg-emerald-950/40 text-emerald-300 hover:border-emerald-600"
             : "border-neutral-700 bg-neutral-950 text-neutral-200 hover:border-blue-600 hover:bg-neutral-900"
         }`}
       >
-        <div className="font-medium">
-          {collected ? "✓ " : ""}
-          {e.name}
-        </div>
-        <div className="mt-0.5 text-xs text-neutral-400">{e.revealedFact}</div>
-        <div className="mt-1 text-[10px] text-neutral-500">
-          {collected ? "클릭해서 자세히 보기" : "클릭해서 확보하기"}
+        <div className="flex h-full gap-2">
+          {e.image && (
+            // eslint-disable-next-line @next/next/no-img-element -- 정적 public 자산 썸네일, next/image 최적화 불필요
+            <img
+              src={e.image}
+              alt=""
+              loading="lazy"
+              className="h-12 w-12 shrink-0 rounded object-cover"
+            />
+          )}
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="truncate font-medium">
+              {collected ? "✓ " : ""}
+              {e.name}
+            </div>
+            <div className="mt-0.5 line-clamp-2 text-xs text-neutral-400">{e.revealedFact}</div>
+            <div className="mt-auto text-[10px] text-neutral-500">
+              {collected ? "클릭해서 자세히 보기" : "클릭해서 확보하기"}
+            </div>
+          </div>
         </div>
       </button>
     );
@@ -126,6 +143,14 @@ export default function InvestigationBoard({
                 ✕
               </button>
             </div>
+            {selected.image && (
+              // eslint-disable-next-line @next/next/no-img-element -- 정적 public 자산, next/image 최적화 불필요
+              <img
+                src={selected.image}
+                alt={selected.name}
+                className="mb-3 w-full rounded-md border border-neutral-800 object-cover"
+              />
+            )}
             <p className="text-sm leading-relaxed text-neutral-300 whitespace-pre-line">
               {selected.detail ?? selected.revealedFact}
             </p>

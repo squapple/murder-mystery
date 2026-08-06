@@ -48,3 +48,7 @@ next-env.d.ts
 
 # Phase 65 — 로컬 파이프라인 디버그 로그(debug-log.ts) — 실제 대화 내용이 담기므로 커밋 안 함
 /logs
+
+# Phase 74 — 사용자가 넣어준 증거품/배경 이미지 원본. public/evidence, public/background.png에
+# 전부 복사돼 실제로는 그쪽만 서빙에 쓰인다 — 원본까지 커밋하면 26MB 중복이라 뺀다.
+/image
