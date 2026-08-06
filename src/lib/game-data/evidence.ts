@@ -8,7 +8,7 @@
 // 삭제했다. 관리실 서브플롯(stmt-lee-office-visit)도 삭제.
 //
 // Phase 40 — 신발 증거 복원(Phase 39에서 삭제한 게 실수였다는 지적). 김영훈 휴대폰
-// 통화·문자 기록 물증 신설. 정민아의 "법인카드 비리 목격" 서브플롯을 완전히 삭제하고
+// 통화·문자 기록 물증 신설. 정민지의 "법인카드 비리 목격" 서브플롯을 완전히 삭제하고
 // "김영훈과의 로비 다툼"으로 교체.
 //
 // Phase 41 — 이현우는 계획적으로 살해했다(몸싸움 없이, 플레이어 공개 텍스트엔 명시
@@ -138,14 +138,14 @@ export const EVIDENCE: EvidenceItem[] = [
     revealTiming: "round1_end",
   },
   {
-    // Phase 40: 정민아의 "법인카드 비리 목격" 서브플롯을 대체 — 그날 밤 심란해 보인
+    // Phase 40: 정민지의 "법인카드 비리 목격" 서브플롯을 대체 — 그날 밤 심란해 보인
     // 이유를 이 사건 하나로 통합했다. 익명 정보원("다른 팀원")이 출처.
     id: "stmt-jeong-lobby-dispute",
     category: "statement",
     name: "팀원 E의 증언",
     revealedFact: "로비에서 있었던 다툼에 대한 이야기",
     detail:
-      "정민아가 로비에서 김영훈을 따라나가 말다툼을 벌이는 모습을 봤다는 목격담이 있다 — 정확히 무슨 이야기였는지까지는 알려지지 않았다.",
+      "정민지가 로비에서 김영훈을 따라나가 말다툼을 벌이는 모습을 봤다는 목격담이 있다 — 정확히 무슨 이야기였는지까지는 알려지지 않았다.",
     revealTiming: "round1_end",
   },
   {
@@ -189,7 +189,7 @@ export const EVIDENCE: EvidenceItem[] = [
     revealTiming: "round1_end",
   },
   {
-    // Phase 39: 정민아의 동기(김영훈과의 파혼/유산 서브플롯)를 공개하는 진술 증거.
+    // Phase 39: 정민지의 동기(김영훈과의 파혼/유산 서브플롯)를 공개하는 진술 증거.
     // 구체적 장면 묘사 없이 "그런 일이 있었다" 수준으로만 서술한다(사용자 명시).
     // Phase 42: round1_end로 앞당김.
     // Phase 64 — 사용자 요청으로 정확한 시기를 추가했다: 2년 전부터 연인 관계,
@@ -198,9 +198,9 @@ export const EVIDENCE: EvidenceItem[] = [
     id: "stmt-jeong-breakup-reason",
     category: "statement",
     name: "팀원 C의 증언",
-    revealedFact: "정민아의 예전 연애에 대한 이야기",
+    revealedFact: "정민지의 예전 연애에 대한 이야기",
     detail:
-      "정민아가 2년 전부터 피해자 김영훈과 연인 관계였다는 걸 아는 사람이 있다 — 결혼까지 이야기가 오갔었고, 1년 전에는 아이도 생겼었다는 이야기가 있다. 그런데 10개월 전쯤 아이를 잃었고, 그 뒤로 사이가 완전히 틀어졌다고 한다. 정확히 그 과정에서 무슨 일이 있었는지까지는 아는 사람이 없다.",
+      "정민지가 2년 전부터 피해자 김영훈과 연인 관계였다는 걸 아는 사람이 있다 — 결혼까지 이야기가 오갔었고, 1년 전에는 아이도 생겼었다는 이야기가 있다. 그런데 10개월 전쯤 아이를 잃었고, 그 뒤로 사이가 완전히 틀어졌다고 한다. 정확히 그 과정에서 무슨 일이 있었는지까지는 아는 사람이 없다.",
     revealTiming: "round1_end",
   },
   {
@@ -267,8 +267,8 @@ export const EVIDENCE: EvidenceItem[] = [
     // Phase 40: 평범한 대조군 — 별다른 의미 없이 막다른 길로 남는다.
     id: "ev-shoe-jeong",
     category: "physical",
-    name: "정민아 신발 확인",
-    revealedFact: "정민아 신발 확인 — 평범한 흙만 검출",
+    name: "정민지 신발 확인",
+    revealedFact: "정민지 신발 확인 — 평범한 흙만 검출",
     detail: "평범한 흙만 묻어있다 — 그 이상 나올 게 없다.",
     revealTiming: "action_triggered",
   },
@@ -295,14 +295,14 @@ export const EVIDENCE: EvidenceItem[] = [
     revealTiming: "action_triggered",
   },
   {
-    // Phase 56 — 정민아의 임신/유산 서브플롯(stmt-jeong-breakup-reason에서는 뭉뚱그려서만
+    // Phase 56 — 정민지의 임신/유산 서브플롯(stmt-jeong-breakup-reason에서는 뭉뚱그려서만
     // 언급됨)을 구체적으로 발견할 경로가 없다는 지적에, 가방 소지품에 실마리를 심었다.
     // 사용자 명시: "이상하다", "왜 있는지 모르겠다" 같은 해석성 문구를 절대 붙이지 않고
     // 다른 소지품과 동일하게 나열만 한다 — 플레이어가 스스로 알아채야 한다.
     id: "ev-bag-jeong",
     category: "physical",
-    name: "정민아 가방 확인",
-    revealedFact: "정민아 가방 내용물 확인",
+    name: "정민지 가방 확인",
+    revealedFact: "정민지 가방 내용물 확인",
     detail: "업무 수첩, 이어폰, 핸드크림, 두통약, 그리고 아기 옷 한 벌이 들어 있다.",
     revealTiming: "action_triggered",
   },
@@ -351,8 +351,8 @@ export const EVIDENCE: EvidenceItem[] = [
   {
     id: "ev-phone-jeong",
     category: "physical",
-    name: "정민아 휴대폰 확인",
-    revealedFact: "정민아 휴대폰 확인",
+    name: "정민지 휴대폰 확인",
+    revealedFact: "정민지 휴대폰 확인",
     detail: "특별히 눈에 띄는 통화나 문자 기록은 없다.",
     revealTiming: "action_triggered",
   },

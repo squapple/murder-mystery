@@ -28,7 +28,7 @@
 // 명령어:
 //   /help              명령어 목록
 //   /reset             대화 기록 초기화(인내심도 0으로 리셋됨)
-//   /character <이름>  캐릭터 교체: park(박서연)/lee(이현우)/jeong(정민아)
+//   /character <이름>  캐릭터 교체: park(박서연)/lee(이현우)/jeong(정민지)
 //   /persona <MBTI>    페르소나 교체 (ISTJ/ISFP/INTP/INFJ/ESTP/ESFJ/ENTJ/ENFP)
 //   /quality on|off    교정+관련성+안전 통합 검수(quality-check.ts) 토글 (기본 on) —
 //                      관련성 "아니오" 시 1회 재생성, 안전 "아니오" 시 폴백 문구로 대체
@@ -73,7 +73,7 @@ const CHARACTER_ALIASES: Record<string, CharacterId> = {
   lee: "role-lee-hyunwoo",
   이현우: "role-lee-hyunwoo",
   jeong: "role-jeong-mina",
-  정민아: "role-jeong-mina",
+  정민지: "role-jeong-mina",
 };
 
 interface ConversationTurn {
@@ -104,7 +104,7 @@ function printHelp() {
   console.log(`
 /help              이 도움말
 /reset             대화 기록 초기화(인내심도 0으로 리셋)
-/character <이름>  캐릭터 교체: park(박서연) / lee(이현우) / jeong(정민아)
+/character <이름>  캐릭터 교체: park(박서연) / lee(이현우) / jeong(정민지)
 /persona <MBTI>    페르소나 교체: ${Object.keys(PERSONAS).join(", ")}
 /quality on|off    교정+관련성+안전 통합 검수(quality-check.ts) 토글 (기본 on) —
                    관련성 "아니오" 시 1회 재생성, 안전 "아니오" 시 폴백 문구로 대체
